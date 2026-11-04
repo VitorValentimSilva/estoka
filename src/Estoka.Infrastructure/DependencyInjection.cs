@@ -47,7 +47,8 @@ public static class DependencyInjection
             })
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<AppDbContext>()
-            .AddSignInManager()
+            .AddSignInManager<AppSignInManager>()
+            .AddClaimsPrincipalFactory<AppClaimsPrincipalFactory>()
             .AddDefaultTokenProviders()
             .AddErrorDescriber<PortugueseIdentityErrorDescriber>();
 
