@@ -28,5 +28,15 @@ Legenda: ✅ feito · 🚧 em andamento · ⏳ pendente
 - ✅ Categorias, Fornecedores, Clientes: CRUD com validação (CPF/CNPJ, e-mail, telefone/CEP com máscara), confirmação de exclusão, snackbars
 - ✅ `/health` com verificação do banco; `PORT`, forwarded headers
 - ✅ Testes de integração HTTP: redirect para login, login dos 3 perfis, senha errada, usuário desativado, health
-## Fase 3 — Estoque, pedidos e dashboard 🚧
-## Fase 4 — Relatórios, auditoria, API, Docker, prints e documentação ⏳
+## Fase 3 — Estoque, pedidos e dashboard ✅
+- ✅ Estoque: lista de movimentações (filtros por tipo, período, texto e produto), registrar entrada e ajuste de inventário (pela quantidade contada)
+- ✅ Atalho "Entrada" nos alertas do dashboard abre o diálogo já com o produto e a quantidade sugerida
+- ✅ Pedidos: lista com filtros por status, período e cliente; clique abre o pedido
+- ✅ Tela do pedido: autocomplete de cliente e produto, itens editáveis, totais em tempo real, aviso de estoque insuficiente, botões conforme o fluxo (confirmar, faturar, entregar, cancelar com motivo) e linha do tempo
+- ✅ Vendedor não altera preço de tabela (só concede desconto) — regra também no serviço
+- ✅ PDF do pedido (QuestPDF, licença Community) em `/pedidos/{id}/pdf`
+- ✅ Dashboard: faturamento, pedidos, ticket médio (com variação vs. mesmo período do mês anterior), itens abaixo do mínimo, gráfico de 30 dias, vendas por categoria, top 5, alertas e pedidos recentes
+- ✅ ProblemDetails para erros em downloads/API
+- ✅ E2E com Playwright (`tests/e2e/pedido-vendedor.cjs`): Vendedor cria e confirma pedido e o estoque baixa
+- ✅ Testes de integração: dashboard consistente com os pedidos, PDF autenticado, 404 em ProblemDetails
+## Fase 4 — Relatórios, auditoria, API, Docker, prints e documentação 🚧
