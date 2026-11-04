@@ -67,7 +67,7 @@ else
                     </div>
                 </div>
                 <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_salesSeries" ChartLabels="_salesLabels" ChartOptions="_lineOptions"
-                          Height="300px" Width="100%" LegendPosition="Position.Bottom" />
+                          Height="300px" Width="100%" LegendPosition="Position.Bottom" Class="sales-chart" />
             </MudPaper>
         </MudItem>
         <MudItem xs="12" lg="4">
@@ -172,7 +172,7 @@ else
 }
 
 @code {
-    private static readonly string[] Palette = ["#0F766E", "#F59E0B", "#6366F1", "#0EA5E9", "#EC4899", "#84CC16", "#8B5CF6", "#F97316", "#14B8A6", "#64748B"];
+    private static readonly string[] Palette = ["#14B8A6", "#F59E0B", "#6366F1", "#0EA5E9", "#EC4899", "#84CC16", "#8B5CF6", "#F97316", "#14B8A6", "#64748B"];
 
     private DashboardData? _data;
     private bool _error;
@@ -184,7 +184,7 @@ else
 
     private readonly LineChartOptions _lineOptions = new()
     {
-        ChartPalette = ["#0F766E", "#F59E0B"],
+        ChartPalette = ["#14B8A6", "#F59E0B"],
         InterpolationOption = InterpolationOption.Straight,
         LineDisplayType = LineDisplayType.Area,
         ShowDataMarkers = false,

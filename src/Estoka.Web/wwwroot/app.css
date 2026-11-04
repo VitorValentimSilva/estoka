@@ -168,7 +168,7 @@ body.estoka-dark .margin-badge--high { color: #86EFAC; }
 }
 /* MudSelect envolve o campo num wrapper próprio: ele é o item flex da toolbar */
 .toolbar > .mud-select { flex: 0 1 240px; min-width: 180px; height: 40px; align-self: center; }
-.toolbar > .mud-select > .mud-input-control { width: 100%; }
+.toolbar > .mud-select > .mud-input-control { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
 @media (max-width: 600px) {
   .toolbar > .mud-select, .toolbar > .mud-input-control, .toolbar > .mud-chipset { flex: 1 1 100%; }
 }
@@ -263,3 +263,6 @@ body.estoka-dark .kpi__change.is-down { color: #FCA5A5; }
 body.estoka-dark .diff__old { color: #FCA5A5; }
 body.estoka-dark .diff__new { color: #86EFAC; }
 .role-card { height: 100%; }
+.order-lines__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.order-lines__row:last-child { border-bottom: 0; }
+@media (max-width: 600px) { .sales-chart { margin-top: -24px; } }

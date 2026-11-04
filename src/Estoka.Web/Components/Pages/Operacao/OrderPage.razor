@@ -115,7 +115,23 @@ else
                 }
                 else
                 {
-                    <div class="table-scroll">
+                    @if (!_editable)
+                    {
+                        @* Celular: lista compacta no lugar da tabela *@
+                        <div class="order-lines d-sm-none">
+                            @foreach (var line in _lines)
+                            {
+                                <div class="order-lines__row">
+                                    <div>
+                                        <div class="cell-title">@line.Name</div>
+                                        <div class="cell-sub"><span class="mono">@line.Sku</span> · @line.Quantity.Qty() @line.Unit.Abbreviation() × @line.UnitPrice.Money()@(line.Discount > 0 ? $" − {line.Discount.Money()}" : "")</div>
+                                    </div>
+                                    <div class="num cell-title nowrap">@line.Total.Money()</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <div class="table-scroll @(_editable ? "" : "d-none d-sm-block")">
                         <MudSimpleTable Dense Elevation="0" Class="order-items">
                             <thead>
                                 <tr>

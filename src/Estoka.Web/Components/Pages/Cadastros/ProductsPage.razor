@@ -26,7 +26,7 @@
                       AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable
                       DebounceInterval="350" Class="grow" aria-label="Buscar produtos" />
         <MudSelect T="Guid?" Value="_categoryId" ValueChanged="OnCategoryChanged" Placeholder="Todas as categorias" Variant="Variant.Outlined"
-                   Margin="Margin.Dense" Clearable Class="fixed" Dense AdornmentIcon="@Icons.Material.Filled.FilterList" aria-label="Filtrar por categoria"
+                   Margin="Margin.Dense" Clearable Dense AdornmentIcon="@Icons.Material.Filled.FilterList" aria-label="Filtrar por categoria"
                    ToStringFunc="@(id => _categories.FirstOrDefault(c => c.Id == id)?.Name ?? string.Empty)">
             @foreach (var c in _categories)
             {
