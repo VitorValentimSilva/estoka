@@ -1,0 +1,149 @@
+@using Estoka.Application.Catalog
+@using Estoka.Application.Inventory
+@using Estoka.Domain.Catalog
+@using Estoka.Domain.Inventory
+@inject StockService Stock
+@inject ProductService Products
+@inject ICurrentUser User
+@inject ISnackbar Snackbar
+@inject ILogger<StockMovementDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudAutocomplete T="ProductPick" Value="_product" ValueChanged="OnProductChanged" SearchFunc="SearchAsync" Label="Produto"
+                                 Variant="Variant.Outlined" ToStringFunc="@(p => p is null ? string.Empty : $"{p.Sku} — {p.Name}")"
+                                 DebounceInterval="250" ResetValueOnEmptyText Clearable Required RequiredError="Selecione o produto."
+                                 AdornmentIcon="@Icons.Material.Filled.Search" ShowProgressIndicator>
+                    <ItemTemplate Context="p">
+                        <div class="d-flex justify-space-between align-center gap-4" style="width: 100%">
+                            <div>
+                                <div class="cell-title">@p.Name</div>
+                                <div class="cell-sub mono">@p.Sku</div>
+                            </div>
+                            <span class="muted nowrap">@p.CurrentStock.Qty() @p.Unit.Abbreviation()</span>
+                        </div>
+                    </ItemTemplate>
+                    <NoItemsTemplate><MudText Class="pa-2 muted">Nenhum produto encontrado.</MudText></NoItemsTemplate>
+                </MudAutocomplete>
+            </MudItem>
+
+            @if (_product is not null)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense Icon="@Icons.Material.Outlined.Inventory2">
+                        Saldo atual: <strong>@_product.CurrentStock.Qty() @_product.Unit.Abbreviation()</strong>
+                        @if (Type == StockMovementType.Ajuste && _counted is { } counted)
+                        {
+                            var delta = counted - _product.CurrentStock;
+                            <span> · Ajuste: <strong class="@(delta < 0 ? "qty-out" : "qty-in")">@(delta > 0 ? "+" : "")@delta.Qty()</strong></span>
+                        }
+                    </MudAlert>
+                </MudItem>
+            }
+
+            @if (Type == StockMovementType.Entrada)
+            {
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="_entry.Quantity" Label="Quantidade recebida" Variant="Variant.Outlined" Min="0"
+                                     Format="#,##0.###" Culture="UiExtensions.PtBr" Required Immediate />
+                </MudItem>
+                @if (_canViewCost)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField T="decimal?" @bind-Value="_entry.UnitCost" Label="Custo unitário" Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start" AdornmentText="R$" Format="N2" Culture="UiExtensions.PtBr" HideSpinButtons
+                                         HelperText="Atualiza o custo de reposição" />
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_entry.Reason" Label="Motivo / documento" Variant="Variant.Outlined" Required
+                                  HelperText="Ex.: Compra — NF-e 48291" MaxLength="200" />
+                </MudItem>
+            }
+            else
+            {
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal?" @bind-Value="_counted" Label="Quantidade contada" Variant="Variant.Outlined" Min="0"
+                                     Format="#,##0.###" Culture="UiExtensions.PtBr" Required Immediate HelperText="Saldo físico encontrado na contagem" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" @bind-Value="_adjustment.Reason" Label="Motivo" Variant="Variant.Outlined" Required>
+                        @foreach (var reason in AdjustmentReasons)
+                        {
+                            <MudSelectItem T="string" Value="reason">@reason</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_saving || _product is null)">Registrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public StockMovementType Type { get; set; } = StockMovementType.Entrada;
+    [Parameter] public Guid? ProductId { get; set; }
+
+    private static readonly string[] AdjustmentReasons =
+        ["Inventário periódico", "Avaria / produto danificado", "Perda / extravio", "Vencimento", "Correção de lançamento"];
+
+    private ProductPick? _product;
+    private readonly StockEntryInput _entry = new();
+    private readonly StockAdjustmentInput _adjustment = new() { Reason = "Inventário periódico" };
+    private decimal? _counted;
+    private bool _saving;
+    private bool _canViewCost;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canViewCost = User.Can(Permission.ViewCost);
+        if (ProductId is { } id)
+        {
+            try
+            {
+                var p = await Products.GetAsync(id);
+                OnProductChanged(new ProductPick(p.Id, p.Sku, p.Name, p.SalePrice, p.CurrentStock, p.Unit));
+                if (Type == StockMovementType.Entrada) _entry.Quantity = Math.Max(p.MinimumStock * 2 - p.CurrentStock, 1);
+                if (_canViewCost) _entry.UnitCost = p.CostPrice;
+            }
+            catch (Exception ex) { Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error); }
+        }
+    }
+
+    private async Task<IEnumerable<ProductPick>> SearchAsync(string? term, CancellationToken ct)
+        => await Products.SearchForSaleAsync(term, 20, ct);
+
+    private void OnProductChanged(ProductPick? product)
+    {
+        _product = product;
+        if (product is not null && Type == StockMovementType.Ajuste) _counted = product.CurrentStock;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_product is null) return;
+        _saving = true;
+        var ok = await Snackbar.RunAsync(async () =>
+        {
+            if (Type == StockMovementType.Entrada)
+            {
+                _entry.ProductId = _product.Id;
+                await Stock.RegisterEntryAsync(_entry);
+            }
+            else
+            {
+                _adjustment.ProductId = _product.Id;
+                _adjustment.CountedQuantity = _counted ?? -1;
+                await Stock.RegisterAdjustmentAsync(_adjustment);
+            }
+        }, Type == StockMovementType.Entrada ? "Entrada registrada." : "Ajuste registrado.", Logger);
+        _saving = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+    }
+}

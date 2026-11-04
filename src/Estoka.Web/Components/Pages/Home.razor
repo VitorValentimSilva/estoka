@@ -1,5 +1,245 @@
 @page "/"
 @attribute [Authorize(Policy = Policies.ViewDashboard)]
+@using Estoka.Application.Dashboard
+@inject DashboardService Dashboard
+@inject ICurrentUser User
+@inject ISnackbar Snackbar
+@inject ILogger<Home> Logger
 
-<PageHeader Title="Dashboard" Subtitle="Visão geral das vendas e do estoque" />
-<EmptyState Icon="@Icons.Material.Outlined.Insights" Title="Dashboard em construção" Description="Os indicadores chegam na fase 3." />
+<PageHeader Title="@($"{Greeting}, {FirstName}")" Subtitle="@SubtitleText">
+    <Actions>
+        @if (User.Can(Permission.ManageOrders))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddShoppingCart" Href="/pedidos/novo">Novo pedido</MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+@if (_data is null)
+{
+    @if (_error)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.ErrorOutline" Title="Não foi possível carregar o dashboard" Description="Tente novamente em instantes.">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">Tentar novamente</MudButton>
+        </EmptyState>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            @for (var i = 0; i < 4; i++)
+            {
+                <MudItem xs="6" lg="3"><MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="128px" Class="rounded-lg" /></MudItem>
+            }
+            <MudItem xs="12" lg="8"><MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="360px" Class="rounded-lg" /></MudItem>
+            <MudItem xs="12" lg="4"><MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="360px" Class="rounded-lg" /></MudItem>
+        </MudGrid>
+    }
+}
+else
+{
+    var k = _data.Kpis;
+    <MudGrid Spacing="3">
+        <MudItem xs="6" lg="3">
+            <KpiCard Label="Faturamento do mês" Value="@k.MonthRevenue.Money()" Icon="@Icons.Material.Outlined.Payments" Accent="#0F766E"
+                     Change="k.RevenueChange" Hint="vs. mesmo período do mês anterior" />
+        </MudItem>
+        <MudItem xs="6" lg="3">
+            <KpiCard Label="Pedidos do mês" Value="@k.MonthOrders.ToString("N0", UiExtensions.PtBr)" Icon="@Icons.Material.Outlined.ReceiptLong" Accent="#6366F1"
+                     Change="k.OrdersChange" Hint="@($"{k.OpenOrders} em andamento")" />
+        </MudItem>
+        <MudItem xs="6" lg="3">
+            <KpiCard Label="Ticket médio" Value="@k.AverageTicket.Money()" Icon="@Icons.Material.Outlined.ShoppingBasket" Accent="#0EA5E9"
+                     Change="k.TicketChange" Hint="por pedido no mês" />
+        </MudItem>
+        <MudItem xs="6" lg="3">
+            <KpiCard Label="Estoque baixo" Value="@($"{k.LowStockCount} {(k.LowStockCount == 1 ? "item" : "itens")}")" Icon="@Icons.Material.Outlined.WarningAmber"
+                     Accent="#D97706">
+                <MudLink Href="/produtos?abaixoMinimo=true" Typo="Typo.body2">Ver produtos abaixo do mínimo →</MudLink>
+            </KpiCard>
+        </MudItem>
+
+        <MudItem xs="12" lg="8">
+            <MudPaper Elevation="0" Class="card pa-4 chart-card">
+                <div class="chart-card__head">
+                    <div>
+                        <MudText Typo="Typo.subtitle1" Class="section-title mb-0">Vendas dos últimos 30 dias</MudText>
+                        <MudText Typo="Typo.body2" Class="muted">@_data.Last30Days.Sum(d => d.Total).Money() em @_data.Last30Days.Sum(d => d.Orders) pedidos</MudText>
+                    </div>
+                </div>
+                <MudChart T="double" ChartType="ChartType.Line" ChartSeries="_salesSeries" ChartLabels="_salesLabels" ChartOptions="_lineOptions"
+                          Height="300px" Width="100%" LegendPosition="Position.Bottom" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Elevation="0" Class="card pa-4 chart-card">
+                <MudText Typo="Typo.subtitle1" Class="section-title">Vendas por categoria</MudText>
+                @if (_categorySeries.Count == 0)
+                {
+                    <EmptyState Icon="@Icons.Material.Outlined.DonutLarge" Title="Sem vendas no período" />
+                }
+                else
+                {
+                    <MudChart T="double" ChartType="ChartType.Donut" ChartSeries="_categorySeries" ChartLabels="_categoryLabels" ChartOptions="_donutOptions"
+                              Height="220px" Width="100%" LegendPosition="Position.Bottom" />
+                    <div class="category-list">
+                        @foreach (var (c, i) in _data.SalesByCategory.Select((c, i) => (c, i)))
+                        {
+                            <div class="category-list__row">
+                                <span class="category-list__dot" style="background: @Palette[i % Palette.Length]"></span>
+                                <span class="category-list__name">@c.Category</span>
+                                <span class="num">@c.Revenue.Money()</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6" lg="4">
+            <MudPaper Elevation="0" Class="card pa-4 full-height">
+                <MudText Typo="Typo.subtitle1" Class="section-title">Top 5 produtos <span class="muted font-weight-regular">· 30 dias</span></MudText>
+                @if (_data.TopProducts.Count == 0)
+                {
+                    <EmptyState Icon="@Icons.Material.Outlined.Leaderboard" Title="Sem vendas no período" />
+                }
+                @{ var max = _data.TopProducts.Count == 0 ? 1 : _data.TopProducts.Max(p => p.Revenue); }
+                @foreach (var (p, i) in _data.TopProducts.Select((p, i) => (p, i + 1)))
+                {
+                    <div class="rank">
+                        <span class="rank__pos">@i</span>
+                        <div class="rank__body">
+                            <div class="d-flex justify-space-between gap-2">
+                                <span class="cell-title rank__name">@p.Name</span>
+                                <span class="num cell-title nowrap">@p.Revenue.Money()</span>
+                            </div>
+                            <MudProgressLinear Value="@((double)(p.Revenue / max * 100))" Color="Color.Primary" Rounded Size="Size.Small" Class="my-1" />
+                            <div class="cell-sub">@p.Quantity.Qty() unidades vendidas · <span class="mono">@p.Sku</span></div>
+                        </div>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6" lg="4">
+            <MudPaper Elevation="0" Class="card pa-4 full-height">
+                <div class="d-flex justify-space-between align-center mb-2">
+                    <MudText Typo="Typo.subtitle1" Class="section-title mb-0">Alertas de estoque</MudText>
+                    <MudLink Href="/produtos?abaixoMinimo=true" Typo="Typo.body2">Ver todos</MudLink>
+                </div>
+                @if (_data.LowStock.Count == 0)
+                {
+                    <EmptyState Icon="@Icons.Material.Outlined.CheckCircle" Title="Tudo certo" Description="Nenhum produto abaixo do estoque mínimo." />
+                }
+                @foreach (var item in _data.LowStock)
+                {
+                    <div class="alert-row">
+                        <MudIcon Icon="@(item.CurrentStock == 0 ? Icons.Material.Filled.ErrorOutline : Icons.Material.Outlined.WarningAmber)"
+                                 Color="@(item.CurrentStock == 0 ? Color.Error : Color.Warning)" Size="Size.Small" />
+                        <div class="alert-row__body">
+                            <div class="cell-title">@item.Name</div>
+                            <div class="cell-sub">Saldo <strong>@item.CurrentStock.Qty()</strong> · mínimo @item.MinimumStock.Qty() @item.Unit.Abbreviation()</div>
+                        </div>
+                        @if (_canManageStock)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Href="@($"/estoque?entrada={item.ProductId}")"
+                                       StartIcon="@Icons.Material.Filled.Add" Class="nowrap">Entrada</MudButton>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Elevation="0" Class="card pa-4 full-height">
+                <div class="d-flex justify-space-between align-center mb-2">
+                    <MudText Typo="Typo.subtitle1" Class="section-title mb-0">Pedidos recentes</MudText>
+                    <MudLink Href="/pedidos" Typo="Typo.body2">Ver todos</MudLink>
+                </div>
+                @foreach (var o in _data.RecentOrders)
+                {
+                    <a class="recent-row" href="@($"/pedidos/{o.Id}")">
+                        <div>
+                            <div class="cell-title">@o.CustomerName</div>
+                            <div class="cell-sub"><span class="mono">PED-@o.Number.ToString("D6")</span> · @o.OrderDate.Local("dd/MM HH:mm")</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="num cell-title">@o.Total.Money()</div>
+                            <OrderStatusChip Status="o.Status" />
+                        </div>
+                    </a>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private static readonly string[] Palette = ["#0F766E", "#F59E0B", "#6366F1", "#0EA5E9", "#EC4899", "#84CC16", "#8B5CF6", "#F97316", "#14B8A6", "#64748B"];
+
+    private DashboardData? _data;
+    private bool _error;
+    private bool _canManageStock;
+    private List<ChartSeries<double>> _salesSeries = [];
+    private string[] _salesLabels = [];
+    private List<ChartSeries<double>> _categorySeries = [];
+    private string[] _categoryLabels = [];
+
+    private readonly LineChartOptions _lineOptions = new()
+    {
+        ChartPalette = ["#0F766E", "#F59E0B"],
+        InterpolationOption = InterpolationOption.Straight,
+        LineDisplayType = LineDisplayType.Area,
+        ShowDataMarkers = false,
+        LineStrokeWidth = 3,
+        YAxisTicks = 1000,
+        MaxNumYAxisTicks = 6,
+        YAxisToStringFunc = v => v >= 1000 ? $"R$ {v / 1000:0.#} mil" : $"R$ {v:0}",
+        YAxisLines = true,
+        XAxisLines = false,
+        ShowLegend = false,
+        YAxisRequireZeroPoint = true,
+    };
+
+    private readonly DonutChartOptions _donutOptions = new() { ChartPalette = Palette, ShowLegend = false, DonutRingRatio = 0.62 };
+
+    private string FirstName => User.UserName.Split(' ')[0];
+    private static string Greeting
+    {
+        get
+        {
+            var hour = BrazilTime.ToLocal(DateTimeOffset.UtcNow).Hour;
+            return hour >= 18 ? "Boa noite" : hour >= 12 ? "Boa tarde" : "Bom dia";
+        }
+    }
+    private string SubtitleText => _data is null ? "Carregando indicadores..." :
+        $"Resumo de {_data.Today.ToString("dddd, d 'de' MMMM", UiExtensions.PtBr)}";
+
+    protected override Task OnInitializedAsync()
+    {
+        _canManageStock = User.Can(Permission.ManageStock);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = false;
+        try
+        {
+            _data = await Dashboard.GetAsync();
+            _salesLabels = _data.Last30Days.Select((d, i) => i % 5 == 4 || i == 0 ? d.Date.ToString("dd/MM", UiExtensions.PtBr) : string.Empty).ToArray();
+            _salesSeries =
+            [
+                new ChartSeries<double> { Name = "Vendas (R$)", Data = new ChartData<double>(_data.Last30Days.Select(d => (double)d.Total).ToList()) },
+            ];
+            _categoryLabels = _data.SalesByCategory.Select(c => c.Category).ToArray();
+            _categorySeries = _data.SalesByCategory.Count == 0 ? [] :
+            [
+                new ChartSeries<double> { Name = "Categorias", Data = new ChartData<double>(_data.SalesByCategory.Select(c => (double)c.Revenue).ToList()) },
+            ];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Falha ao carregar dashboard");
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            _error = true;
+        }
+    }
+}
