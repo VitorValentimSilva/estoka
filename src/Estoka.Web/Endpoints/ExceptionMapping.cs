@@ -33,7 +33,12 @@ internal sealed class ProblemDetailsExceptionHandler(IProblemDetailsService prob
         {
             Status = status,
             Title = title,
-            Detail = status == 500 ? "Ocorreu um erro inesperado." : exception.Message,
+            Detail = exception switch
+            {
+                ValidationException validation => string.Join(" ", validation.Errors.Select(e => e.ErrorMessage).Distinct()),
+                _ when status == 500 => "Ocorreu um erro inesperado.",
+                _ => exception.Message,
+            },
             Instance = path,
         };
         if (exception is ValidationException v)

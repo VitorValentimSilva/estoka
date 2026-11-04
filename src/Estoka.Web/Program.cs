@@ -4,6 +4,7 @@ using Estoka.Infrastructure;
 using Estoka.Infrastructure.Identity;
 using Estoka.Infrastructure.Persistence;
 using Estoka.Infrastructure.Seed;
+using Estoka.Web.Api;
 using Estoka.Web.Components;
 using Estoka.Web.Endpoints;
 using HealthResponseWriter = Estoka.Web.Endpoints.HealthResponseWriter;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using MudBlazor;
 using MudBlazor.Services;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,6 +39,9 @@ builder.Services.AddAuthentication(options =>
         options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
     })
     .AddIdentityCookies();
+// API REST: autenticação por chave no cabeçalho X-Api-Key (esquema separado do cookie).
+builder.Services.AddAuthentication()
+    .AddScheme<ApiKeyAuthOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthOptions.Scheme, o => o.Key = builder.Configuration["Api:Key"]);
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.Name = "estoka.auth";
@@ -66,6 +71,9 @@ builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
 // HTML com acentos em UTF-8 (sem &#xE1;): páginas menores e mais legíveis.
 builder.Services.Configure<Microsoft.Extensions.WebEncoders.WebEncoderOptions>(o =>
     o.TextEncoderSettings = new System.Text.Encodings.Web.TextEncoderSettings(System.Text.Unicode.UnicodeRanges.All));
+
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+builder.Services.AddEstokaOpenApi();
 
 builder.Services.AddMudServices(config =>
 {
@@ -122,6 +130,15 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
 }).AllowAnonymous();
 app.MapAccountEndpoints();
 app.MapDocumentEndpoints();
+app.MapApiV1();
+app.MapOpenApi().AllowAnonymous();
+app.MapScalarApiReference("/scalar", o => o
+        .WithTitle("Estoka API")
+        .AddPreferredSecuritySchemes(ApiKeyAuthOptions.Scheme)
+        .AddApiKeyAuthentication(ApiKeyAuthOptions.Scheme, scheme => scheme.Value = app.Configuration.GetValue("Demo:Enabled", false)
+            ? app.Configuration["Api:Key"] ?? string.Empty
+            : string.Empty))
+    .AllowAnonymous();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
