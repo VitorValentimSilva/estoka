@@ -16,6 +16,17 @@ Legenda: ✅ feito · 🚧 em andamento · ⏳ pendente
 - ✅ Testes unitários (domínio, CPF/CNPJ, connection string, agenda do reset, permissões)
 - ✅ Testes de integração com Postgres real (seed, consistência estoque × movimentações, concorrência do último item, fluxo do pedido, autorização no serviço, auditoria)
 
-## Fase 2 — Autenticação + layout + cadastros ⏳
-## Fase 3 — Estoque, pedidos e dashboard ⏳
+## Fase 2 — Autenticação + layout + cadastros ✅
+- ✅ ASP.NET Core Identity com cookie (`estoka.auth`), sem cadastro público; login SSR com antiforgery e bloqueio de usuário desativado
+- ✅ Caixa "Acesso de demonstração" (clique preenche e-mail/senha)
+- ✅ Policies por permissão derivadas da mesma matriz usada nos serviços; `AuthorizeRouteView` + `AuthorizeView` no menu
+- ✅ Usuário corrente propagado ao circuito do Blazor Server (CircuitHandler) e às requisições HTTP (middleware)
+- ✅ Revalidação periódica da sessão (usuário desativado/papel alterado derruba o circuito)
+- ✅ Data Protection keys no banco (`data_protection_keys`)
+- ✅ Layout MudBlazor 9: AppBar, Drawer responsivo, tema claro/escuro salvo em cookie, breadcrumbs, avatar com menu, faixa de demo, rodapé configurável (`Branding`)
+- ✅ Produtos: MudDataGrid com paginação/ordenação/filtro no servidor, busca nome/SKU, filtro por categoria e "abaixo do mínimo", diálogo com FluentValidation, histórico de movimentações, margem oculta para Vendedor
+- ✅ Categorias, Fornecedores, Clientes: CRUD com validação (CPF/CNPJ, e-mail, telefone/CEP com máscara), confirmação de exclusão, snackbars
+- ✅ `/health` com verificação do banco; `PORT`, forwarded headers
+- ✅ Testes de integração HTTP: redirect para login, login dos 3 perfis, senha errada, usuário desativado, health
+## Fase 3 — Estoque, pedidos e dashboard 🚧
 ## Fase 4 — Relatórios, auditoria, API, Docker, prints e documentação ⏳
