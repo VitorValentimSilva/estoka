@@ -1,0 +1,24 @@
+# Blueprint do Render (https://render.com/docs/blueprint-spec)
+# O banco fica no Neon (PostgreSQL serverless): cole a connection string em ConnectionStrings__Default.
+services:
+  - type: web
+    name: estoka
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ConnectionStrings__Default
+        sync: false            # postgresql://usuario:senha@host/neondb?sslmode=require
+      - key: Demo__Enabled
+        value: "true"
+      - key: Demo__ResetHour
+        value: "4"
+      - key: Api__Key
+        generateValue: true    # chave da API gerada pelo Render
+      - key: Branding__AuthorName
+        value: "Vitor Valentim Silva"
+      - key: Branding__AuthorUrl
+        value: "https://github.com/VitorValentimSilva"

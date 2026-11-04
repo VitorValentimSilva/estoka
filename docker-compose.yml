@@ -1,0 +1,32 @@
+# Sobe o Estoka + PostgreSQL localmente:  docker compose up --build
+# Acesse http://localhost:8080 (usuários de demonstração na tela de login).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: estoka
+      POSTGRES_USER: estoka
+      POSTGRES_PASSWORD: estoka
+    volumes:
+      - estoka-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U estoka -d estoka"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Database=estoka;Username=estoka;Password=estoka"
+      Database__RequireSsl: "false"   # Postgres local do compose não tem TLS
+      Demo__Enabled: "true"
+      Api__Key: "estoka-demo-key"
+    ports:
+      - "8080:8080"
+
+volumes:
+  estoka-db:

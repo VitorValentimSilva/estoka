@@ -19,6 +19,10 @@ public static class ConnectionStringHelper
         if (requireSsl && builder.SslMode is SslMode.Disable or SslMode.Allow or SslMode.Prefer)
             builder.SslMode = SslMode.Require;
 
+        // Não usamos Kerberos/GSSAPI; desabilitar evita a busca pela libgssapi (ausente na imagem aspnet).
+        if (!raw.Contains("gss", StringComparison.OrdinalIgnoreCase))
+            builder.GssEncryptionMode = GssEncryptionMode.Disable;
+
         return builder.ConnectionString;
     }
 
