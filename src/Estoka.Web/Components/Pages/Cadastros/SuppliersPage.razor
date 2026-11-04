@@ -1,0 +1,99 @@
+@page "/fornecedores"
+@attribute [Authorize(Policy = Policies.ManageCatalog)]
+@using Estoka.Application.Catalog
+@using Estoka.Domain.Common
+@inject SupplierService Suppliers
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject ILogger<SuppliersPage> Logger
+
+<PageHeader Title="Fornecedores" Subtitle="Empresas que abastecem o seu estoque" Breadcrumbs="_crumbs">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenEditorAsync(null)">
+            Novo fornecedor
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<MudPaper Elevation="0" Class="card">
+    <div class="toolbar">
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged" Placeholder="Buscar por nome ou CNPJ" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable DebounceInterval="350" Class="grow" />
+    </div>
+    <MudDataGrid @ref="_grid" T="SupplierDto" ServerData="LoadAsync" Dense Hover RowsPerPage="25" Elevation="0" Class="data-grid"
+                 Breakpoint="Breakpoint.None" SortMode="SortMode.Single">
+        <Columns>
+            <PropertyColumn Property="x => x.DisplayName" Title="Fornecedor" SortBy="x => x.CompanyName">
+                <CellTemplate>
+                    <div class="cell-title">@context.Item.DisplayName</div>
+                    <div class="cell-sub">@context.Item.CompanyName</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Cnpj" Title="CNPJ" Sortable="false" CellClass="mono nowrap">
+                <CellTemplate>@DocumentValidator.FormatCnpj(context.Item.Cnpj)</CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.ContactName" Title="Contato" Sortable="false">
+                <CellTemplate>
+                    <div>@context.Item.ContactName</div>
+                    <div class="cell-sub">@UiExtensions.Phone(context.Item.Phone)@(context.Item.Email is null ? "" : $" · {context.Item.Email}")</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.City" Title="Cidade">
+                <CellTemplate>@context.Item.City@(context.Item.State is null ? "" : $"/{context.Item.State}")</CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.ProductCount" Title="Produtos" Sortable="false" HeaderClass="text-right" CellClass="text-right num" />
+            <TemplateColumn Sortable="false" CellClass="text-right nowrap" HeaderStyle="width: 1%">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => OpenEditorAsync(context.Item)" aria-label="Editar" />
+                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context.Item)" aria-label="Excluir" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent>
+            <EmptyState Icon="@Icons.Material.Outlined.LocalShipping" Title="Nenhum fornecedor encontrado" />
+        </NoRecordsContent>
+        <LoadingContent><PageLoading Text="Carregando fornecedores..." /></LoadingContent>
+        <PagerContent>
+            <MudDataGridPager T="SupplierDto" PageSizeOptions="[10, 25, 50]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" />
+        </PagerContent>
+    </MudDataGrid>
+</MudPaper>
+
+@code {
+    private readonly List<BreadcrumbItem> _crumbs = [new("Cadastros", null, disabled: true), new("Fornecedores", null, disabled: true)];
+    private MudDataGrid<SupplierDto> _grid = default!;
+    private string? _search;
+
+    private async Task<GridData<SupplierDto>> LoadAsync(GridState<SupplierDto> state, CancellationToken ct)
+    {
+        try
+        {
+            var sort = state.SortDefinitions.FirstOrDefault();
+            var result = await Suppliers.GetPagedAsync(new SupplierQuery
+            {
+                Page = state.Page, PageSize = state.PageSize, SortBy = sort?.SortBy, SortDescending = sort?.Descending ?? false, Search = _search,
+            }, ct);
+            return new GridData<SupplierDto> { Items = result.Items, TotalItems = result.TotalCount };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            return new GridData<SupplierDto> { Items = [], TotalItems = 0 };
+        }
+    }
+
+    private Task OnSearchChanged(string? value) { _search = value; return _grid.ReloadServerData(); }
+
+    private async Task OpenEditorAsync(SupplierDto? item)
+    {
+        var parameters = new DialogParameters<SupplierDialog> { { x => x.Supplier, item } };
+        var dialog = await Dialogs.ShowAsync<SupplierDialog>(item is null ? "Novo fornecedor" : "Editar fornecedor", parameters, DialogExtensions.FormOptions);
+        if (await dialog.Result is { Canceled: false }) await _grid.ReloadServerData();
+    }
+
+    private async Task DeleteAsync(SupplierDto item)
+    {
+        if (await Dialogs.ConfirmAsync("Excluir fornecedor", $"Excluir \"{item.DisplayName}\"?") is null) return;
+        if (await Snackbar.RunAsync(() => Suppliers.DeleteAsync(item.Id), "Fornecedor excluído.", Logger)) await _grid.ReloadServerData();
+    }
+}

@@ -1,0 +1,8 @@
+<div class="d-flex flex-column align-center justify-center pa-16" style="min-height: 40vh">
+    <MudProgressCircular Color="Color.Primary" Indeterminate Size="Size.Large" />
+    <MudText Typo="Typo.body2" Class="mt-4 mud-text-secondary">@Text</MudText>
+</div>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Carregando...";
+}

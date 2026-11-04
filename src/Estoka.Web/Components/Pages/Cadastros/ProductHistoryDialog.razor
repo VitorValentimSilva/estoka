@@ -1,0 +1,50 @@
+@using Estoka.Application.Inventory
+@inject StockService Stock
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_page is null)
+        {
+            <PageLoading />
+        }
+        else if (_page.TotalCount == 0)
+        {
+            <EmptyState Icon="@Icons.Material.Outlined.SwapVert" Title="Sem movimentações" Description="Este produto ainda não teve entradas ou saídas." />
+        }
+        else
+        {
+            <MovementTable Items="_page.Items" ShowProduct="false" />
+            @if (_page.TotalCount > _page.Items.Count)
+            {
+                <MudText Typo="Typo.caption" Class="muted mt-2 d-block">
+                    Exibindo as @_page.Items.Count movimentações mais recentes de @_page.TotalCount.
+                    <MudLink Href="@($"/estoque?produto={ProductId}")">Ver todas</MudLink>
+                </MudText>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Close()">Fechar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Guid ProductId { get; set; }
+
+    private PagedResult<StockMovementDto>? _page;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _page = await Stock.GetMovementsAsync(new StockMovementQuery { ProductId = ProductId, PageSize = 50 });
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            _page = PagedResult<StockMovementDto>.Empty;
+        }
+    }
+}

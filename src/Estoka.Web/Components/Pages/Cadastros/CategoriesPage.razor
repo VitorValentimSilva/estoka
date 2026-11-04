@@ -1,0 +1,81 @@
+@page "/categorias"
+@attribute [Authorize(Policy = Policies.ManageCatalog)]
+@using Estoka.Application.Catalog
+@inject CategoryService Categories
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject ILogger<CategoriesPage> Logger
+
+<PageHeader Title="Categorias" Subtitle="Organize o catálogo por família de produtos" Breadcrumbs="_crumbs">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenEditorAsync(null)">
+            Nova categoria
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<MudPaper Elevation="0" Class="card">
+    <div class="toolbar">
+        <MudTextField T="string" @bind-Value="_search" Placeholder="Filtrar categorias" Adornment="Adornment.Start" Immediate
+                      AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable Class="grow" />
+    </div>
+    @if (_items is null)
+    {
+        <PageLoading />
+    }
+    else
+    {
+        <MudDataGrid T="CategoryDto" Items="Filtered" Dense Hover Elevation="0" Class="data-grid" Breakpoint="Breakpoint.None"
+                     SortMode="SortMode.Single">
+            <Columns>
+                <PropertyColumn Property="x => x.Name" Title="Nome" CellClass="cell-title" />
+                <PropertyColumn Property="x => x.Description" Title="Descrição" CellClass="muted" />
+                <PropertyColumn Property="x => x.ProductCount" Title="Produtos" HeaderClass="text-right" CellClass="text-right num">
+                    <CellTemplate>
+                        <MudLink Href="@($"/produtos?categoria={context.Item.Id}")">@context.Item.ProductCount</MudLink>
+                    </CellTemplate>
+                </PropertyColumn>
+                <TemplateColumn Sortable="false" CellClass="text-right nowrap" HeaderStyle="width: 1%">
+                    <CellTemplate>
+                        <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => OpenEditorAsync(context.Item)" aria-label="Editar" />
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context.Item)" aria-label="Excluir" />
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <NoRecordsContent>
+                <EmptyState Icon="@Icons.Material.Outlined.Category" Title="Nenhuma categoria" Description="Cadastre a primeira categoria do catálogo." />
+            </NoRecordsContent>
+        </MudDataGrid>
+    }
+</MudPaper>
+
+@code {
+    private readonly List<BreadcrumbItem> _crumbs = [new("Cadastros", null, disabled: true), new("Categorias", null, disabled: true)];
+    private IReadOnlyList<CategoryDto>? _items;
+    private string? _search;
+
+    private IEnumerable<CategoryDto> Filtered => string.IsNullOrWhiteSpace(_search)
+        ? _items ?? []
+        : (_items ?? []).Where(c => c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try { _items = await Categories.ListAsync(); }
+        catch (Exception ex) { Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error); _items = []; }
+    }
+
+    private async Task OpenEditorAsync(CategoryDto? item)
+    {
+        var parameters = new DialogParameters<CategoryDialog> { { x => x.Category, item } };
+        var dialog = await Dialogs.ShowAsync<CategoryDialog>(item is null ? "Nova categoria" : "Editar categoria", parameters, DialogExtensions.SmallOptions);
+        if (await dialog.Result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAsync(CategoryDto item)
+    {
+        if (await Dialogs.ConfirmAsync("Excluir categoria", $"Excluir a categoria \"{item.Name}\"?") is null) return;
+        if (await Snackbar.RunAsync(() => Categories.DeleteAsync(item.Id), "Categoria excluída.", Logger)) await LoadAsync();
+    }
+}

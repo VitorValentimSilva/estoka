@@ -1,7 +1,5 @@
-﻿@page "/"
+@page "/"
+@attribute [Authorize(Policy = Policies.ViewDashboard)]
 
-<PageTitle>Home</PageTitle>
-
-<h1>Hello, world!</h1>
-
-Welcome to your new app.
+<PageHeader Title="Dashboard" Subtitle="Visão geral das vendas e do estoque" />
+<EmptyState Icon="@Icons.Material.Outlined.Insights" Title="Dashboard em construção" Description="Os indicadores chegam na fase 3." />

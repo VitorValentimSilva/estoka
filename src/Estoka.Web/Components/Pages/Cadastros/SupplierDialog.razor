@@ -1,0 +1,84 @@
+@using Estoka.Application.Catalog
+@using Estoka.Domain.Common
+@using FV = FluentValidation
+@inject SupplierService Suppliers
+@inject FV.IValidator<SupplierInput> Validator
+@inject ISnackbar Snackbar
+@inject ILogger<SupplierDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input" Validation="Validator.ForMudForm()" ValidationDelay="0">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="7">
+                    <MudTextField @bind-Value="_input.CompanyName" For="() => _input.CompanyName" Label="Razão social" Variant="Variant.Outlined" Required Immediate />
+                </MudItem>
+                <MudItem xs="12" sm="5">
+                    <MudTextField @bind-Value="_input.Cnpj" For="() => _input.Cnpj" Label="CNPJ" Variant="Variant.Outlined" Required
+                                  Mask="UiExtensions.CnpjMask" Immediate />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.TradeName" For="() => _input.TradeName" Label="Nome fantasia" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.ContactName" For="() => _input.ContactName" Label="Pessoa de contato" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.Email" For="() => _input.Email" Label="E-mail" Variant="Variant.Outlined" InputType="InputType.Email" Immediate />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_input.Phone" For="() => _input.Phone" Label="Telefone" Variant="Variant.Outlined" Mask="UiExtensions.PhoneMask" Immediate />
+                </MudItem>
+                <MudItem xs="8">
+                    <MudTextField @bind-Value="_input.City" For="() => _input.City" Label="Cidade" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="4">
+                    <MudSelect T="string" @bind-Value="_input.State" For="() => _input.State" Label="UF" Variant="Variant.Outlined" Clearable>
+                        @foreach (var uf in BrazilianStates.All)
+                        {
+                            <MudSelectItem T="string" Value="uf">@uf</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_input.Notes" For="() => _input.Notes" Label="Observações" Variant="Variant.Outlined" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">Salvar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public SupplierDto? Supplier { get; set; }
+
+    private MudForm _form = default!;
+    private SupplierInput _input = new();
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Supplier is null) return;
+        _input = SupplierInput.From(Supplier);
+        _input.Cnpj = DocumentValidator.FormatCnpj(Supplier.Cnpj);
+        _input.Phone = UiExtensions.Phone(Supplier.Phone);
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid) return;
+        _saving = true;
+        var ok = await Snackbar.RunAsync(async () =>
+        {
+            if (Supplier is not null) await Suppliers.UpdateAsync(Supplier.Id, _input);
+            else await Suppliers.CreateAsync(_input);
+        }, "Fornecedor salvo.", Logger);
+        _saving = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+    }
+}

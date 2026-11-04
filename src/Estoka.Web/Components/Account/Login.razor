@@ -1,0 +1,144 @@
+@page "/login"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@using System.ComponentModel.DataAnnotations
+@using Estoka.Infrastructure.Identity
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<AppUser> SignInManager
+@inject UserManager<AppUser> UserManager
+@inject NavigationManager Navigation
+@inject IOptions<BrandingOptions> Branding
+@inject IOptions<Estoka.Infrastructure.Seed.DemoOptions> Demo
+@inject ILogger<Login> Logger
+
+<PageTitle>Entrar · Estoka</PageTitle>
+
+<div class="auth">
+    <section class="auth__hero" aria-hidden="true">
+        <div class="auth__hero-inner">
+            <div class="auth__logo">
+                <img src="favicon.svg" alt="" width="44" height="44" />
+                <span>Estoka</span>
+            </div>
+            <h2>Estoque e vendas sob controle, sem planilha.</h2>
+            <ul>
+                <li>Pedidos com baixa automática de estoque</li>
+                <li>Alertas de estoque mínimo e curva ABC</li>
+                <li>Relatórios em Excel e PDF, auditoria completa</li>
+            </ul>
+            <p class="auth__company">@Branding.Value.CompanyName · @Branding.Value.CompanyCity</p>
+        </div>
+    </section>
+
+    <section class="auth__panel">
+        <div class="auth__card">
+            <div class="auth__logo auth__logo--mobile">
+                <img src="favicon.svg" alt="" width="36" height="36" />
+                <span>Estoka</span>
+            </div>
+            <h1>Entrar</h1>
+            <p class="auth__subtitle">Acesse o painel da @Branding.Value.CompanyName.</p>
+
+            @if (SignedOut)
+            {
+                <div class="auth__alert auth__alert--info">Você saiu do sistema.</div>
+            }
+            @if (_error is not null)
+            {
+                <div class="auth__alert auth__alert--error" role="alert">@_error</div>
+            }
+
+            <EditForm Model="Input!" method="post" OnValidSubmit="LoginAsync" FormName="login" class="auth__form">
+                <DataAnnotationsValidator />
+                <label for="email">E-mail</label>
+                <InputText id="email" @bind-Value="Input!.Email" type="email" autocomplete="username" placeholder="voce@empresa.com.br" />
+                <ValidationMessage For="() => Input!.Email" class="auth__field-error" />
+
+                <label for="password">Senha</label>
+                <InputText id="password" @bind-Value="Input!.Password" type="password" autocomplete="current-password" placeholder="••••••••" />
+                <ValidationMessage For="() => Input!.Password" class="auth__field-error" />
+
+                <label class="auth__remember">
+                    <InputCheckbox @bind-Value="Input!.RememberMe" /> Manter conectado
+                </label>
+
+                <button type="submit" class="auth__submit">Entrar</button>
+            </EditForm>
+
+            @if (Demo.Value.Enabled)
+            {
+                <div class="demo-access">
+                    <div class="demo-access__title">Acesso de demonstração</div>
+                    <p>Clique em um perfil para preencher. Senha de todos: <code>@Demo.Value.Password</code></p>
+                    <div class="demo-access__list">
+                        @foreach (var (email, name, role) in Estoka.Infrastructure.Seed.DemoUsers.All)
+                        {
+                            <button type="button" class="demo-access__user" data-demo-email="@email" data-demo-password="@Demo.Value.Password">
+                                <span class="demo-access__role">@role</span>
+                                <span class="demo-access__email">@email</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <p class="auth__footer">
+                Projeto fictício para portfólio por <a href="@Branding.Value.AuthorUrl" target="_blank" rel="noopener">@Branding.Value.AuthorName</a>
+            </p>
+        </div>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromForm] private LoginInput? Input { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "saiu")] private int? SignedOutFlag { get; set; }
+
+    private string? _error;
+
+    protected override void OnInitialized() => Input ??= new();
+    private bool SignedOut => SignedOutFlag == 1 && _error is null;
+
+    private async Task LoginAsync()
+    {
+        var user = await UserManager.FindByEmailAsync(Input!.Email.Trim());
+        if (user is null)
+        {
+            _error = "E-mail ou senha inválidos.";
+            return;
+        }
+
+        var result = await SignInManager.PasswordSignInAsync(user, Input!.Password, Input!.RememberMe, lockoutOnFailure: true);
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("Login de {Email}", user.Email);
+            Navigation.NavigateTo(SafeReturnUrl, forceLoad: true);
+            return;
+        }
+
+        _error = result switch
+        {
+            { IsLockedOut: true } => "Muitas tentativas inválidas. Tente novamente em alguns minutos.",
+            { IsNotAllowed: true } => "Usuário desativado. Fale com o administrador.",
+            _ => "E-mail ou senha inválidos.",
+        };
+    }
+
+    private string SafeReturnUrl =>
+        !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') && !ReturnUrl.StartsWith("//") && !ReturnUrl.StartsWith("/\\")
+            ? ReturnUrl
+            : "/";
+
+    private sealed class LoginInput
+    {
+        [Required(ErrorMessage = "Informe o e-mail.")]
+        [EmailAddress(ErrorMessage = "E-mail inválido.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Informe a senha.")]
+        public string Password { get; set; } = string.Empty;
+
+        public bool RememberMe { get; set; }
+    }
+}

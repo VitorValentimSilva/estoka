@@ -1,0 +1,169 @@
+@using Estoka.Application.Catalog
+@using Estoka.Domain.Catalog
+@using FV = FluentValidation
+@inject ProductService Products
+@inject CategoryService Categories
+@inject SupplierService Suppliers
+@inject FV.IValidator<ProductInput> Validator
+@inject ICurrentUser User
+@inject ISnackbar Snackbar
+@inject ILogger<ProductDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        @if (_input is null)
+        {
+            <PageLoading />
+        }
+        else
+        {
+            <MudForm @ref="_form" Model="_input" Validation="Validator.ForMudForm()" ValidationDelay="0">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudTextField @bind-Value="_input.Sku" For="() => _input.Sku" Label="SKU" Variant="Variant.Outlined" Required
+                                      HelperText="Código interno único" Immediate />
+                    </MudItem>
+                    <MudItem xs="12" sm="8">
+                        <MudTextField @bind-Value="_input.Name" For="() => _input.Name" Label="Nome" Variant="Variant.Outlined" Required Immediate />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid" @bind-Value="_input.CategoryId" For="() => _input.CategoryId" Label="Categoria" Variant="Variant.Outlined" Required>
+                            @foreach (var c in _categories)
+                            {
+                                <MudSelectItem T="Guid" Value="c.Id">@c.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid?" @bind-Value="_input.SupplierId" Label="Fornecedor" Variant="Variant.Outlined" Clearable>
+                            @foreach (var s in _suppliers)
+                            {
+                                <MudSelectItem T="Guid?" Value="s.Id">@s.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    @if (_canViewCost)
+                    {
+                        <MudItem xs="12" sm="4">
+                            <MudNumericField @bind-Value="_input.CostPrice" For="() => _input.CostPrice" Label="Preço de custo" Variant="Variant.Outlined"
+                                             Adornment="Adornment.Start" AdornmentText="R$" Format="N2" Culture="UiExtensions.PtBr" HideSpinButtons Immediate />
+                        </MudItem>
+                    }
+                    <MudItem xs="12" sm="@(_canViewCost ? 4 : 6)">
+                        <MudNumericField @bind-Value="_input.SalePrice" For="() => _input.SalePrice" Label="Preço de venda" Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start" AdornmentText="R$" Format="N2" Culture="UiExtensions.PtBr" HideSpinButtons Immediate />
+                    </MudItem>
+                    @if (_canViewCost)
+                    {
+                        <MudItem xs="12" sm="4" Class="d-flex align-center">
+                            <div class="margin-preview">
+                                <span class="muted">Margem</span>
+                                <MarginBadge Value="Margin" />
+                                <span class="cell-sub">Lucro bruto: @((_input.SalePrice - _input.CostPrice).Money())</span>
+                            </div>
+                        </MudItem>
+                    }
+                    <MudItem xs="12" sm="@(_canViewCost ? 4 : 6)">
+                        <MudSelect T="UnitOfMeasure" @bind-Value="_input.Unit" Label="Unidade" Variant="Variant.Outlined">
+                            @foreach (var unit in Enum.GetValues<UnitOfMeasure>())
+                            {
+                                <MudSelectItem T="UnitOfMeasure" Value="unit">@unit.Abbreviation() — @unit</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudNumericField @bind-Value="_input.MinimumStock" For="() => _input.MinimumStock" Label="Estoque mínimo" Variant="Variant.Outlined" Format="#,##0.###"
+                                         Min="0" Culture="UiExtensions.PtBr" Immediate />
+                    </MudItem>
+                    @if (ProductId is null)
+                    {
+                        <MudItem xs="12" sm="4">
+                            <MudNumericField @bind-Value="_input.InitialStock" For="() => _input.InitialStock" Label="Estoque inicial" Variant="Variant.Outlined" Format="#,##0.###"
+                                             Min="0" Culture="UiExtensions.PtBr" HelperText="Gera uma entrada" Immediate />
+                        </MudItem>
+                    }
+                    else
+                    {
+                        <MudItem xs="12" sm="4">
+                            <MudTextField Value="@($"{_currentStock.Qty()} {_input.Unit.Abbreviation()}")" Label="Saldo atual" Variant="Variant.Outlined" ReadOnly
+                                          HelperText="Altere pela tela de Estoque" />
+                        </MudItem>
+                    }
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_input.Description" For="() => _input.Description" Label="Descrição" Variant="Variant.Outlined" Lines="2" />
+                    </MudItem>
+                    <MudItem xs="12" sm="8">
+                        <MudTextField @bind-Value="_input.ImageUrl" For="() => _input.ImageUrl" Label="URL da imagem (opcional)" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4" Class="d-flex align-center">
+                        <MudSwitch @bind-Value="_input.IsActive" Color="Color.Primary" Label="@(_input.IsActive ? "Ativo para venda" : "Inativo")" />
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving || _input is null">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
+            }
+            Salvar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Guid? ProductId { get; set; }
+
+    private MudForm _form = default!;
+    private ProductInput? _input;
+    private IReadOnlyList<LookupItem> _categories = [];
+    private IReadOnlyList<LookupItem> _suppliers = [];
+    private decimal _currentStock;
+    private bool _saving;
+    private bool _canViewCost;
+
+    private decimal Margin => _input is { SalePrice: > 0 } i ? Math.Round((i.SalePrice - i.CostPrice) / i.SalePrice * 100, 1) : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canViewCost = User.Can(Permission.ViewCost);
+        try
+        {
+            _categories = await Categories.LookupAsync();
+            _suppliers = await Suppliers.LookupAsync();
+            if (ProductId is { } id)
+            {
+                var details = await Products.GetAsync(id);
+                _currentStock = details.CurrentStock;
+                _input = ProductInput.From(details);
+            }
+            else
+            {
+                _input = new ProductInput { CategoryId = _categories.FirstOrDefault()?.Id ?? Guid.Empty };
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            Dialog.Cancel();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid || _input is null) return;
+        _saving = true;
+        var ok = await Snackbar.RunAsync(async () =>
+        {
+            if (ProductId is { } id) await Products.UpdateAsync(id, _input);
+            else await Products.CreateAsync(_input);
+        }, ProductId is null ? "Produto cadastrado." : "Produto atualizado.", Logger);
+        _saving = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+    }
+}

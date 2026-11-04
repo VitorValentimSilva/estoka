@@ -1,21 +1,40 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="pt-BR">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Estoka — gestão de estoque e vendas para pequenas empresas" />
     <base href="/" />
     <ResourcePreloader />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Estoka.Web.styles.css"]" />
     <ImportMap />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
-<body>
-    <Routes />
+<body class="@(IsDarkMode ? "estoka-dark" : "estoka-light")">
+    <Routes @rendermode="PageRenderMode" IsDarkMode="IsDarkMode" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+    <script src="@Assets["js/estoka.js"]"></script>
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+
+    /// <summary>Páginas de conta (login) são renderizadas estaticamente; o restante é Interactive Server.</summary>
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContext.AcceptsInteractiveRouting() ? new InteractiveServerRenderMode(prerender: false) : null;
+
+    /// <summary>Preferência de tema salva em cookie, lida já no primeiro HTML (sem "piscar").</summary>
+    private bool IsDarkMode => HttpContext.Request.Cookies["estoka-theme"] == "dark";
+}

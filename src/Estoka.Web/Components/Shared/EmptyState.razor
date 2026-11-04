@@ -1,0 +1,21 @@
+<div class="empty-state">
+    <div class="empty-state__icon">
+        <MudIcon Icon="@Icon" Size="Size.Large" />
+    </div>
+    <MudText Typo="Typo.h6" Class="mt-3">@Title</MudText>
+    @if (!string.IsNullOrEmpty(Description))
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1" Style="max-width: 420px">@Description</MudText>
+    }
+    @if (ChildContent is not null)
+    {
+        <div class="mt-4">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.Inbox;
+    [Parameter] public string Title { get; set; } = "Nada por aqui";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

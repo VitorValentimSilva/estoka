@@ -1,0 +1,130 @@
+@page "/clientes"
+@attribute [Authorize(Policy = Policies.ViewCustomers)]
+@using Estoka.Application.Customers
+@using Estoka.Domain.Customers
+@inject CustomerService Customers
+@inject ICurrentUser User
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject ILogger<CustomersPage> Logger
+
+<PageHeader Title="Clientes" Subtitle="Pessoas físicas e jurídicas que compram da distribuidora" Breadcrumbs="_crumbs">
+    <Actions>
+        @if (_canManage)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => OpenEditorAsync(null)">
+                Novo cliente
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+<MudPaper Elevation="0" Class="card">
+    <div class="toolbar">
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged" Placeholder="Buscar por nome, e-mail, CPF ou CNPJ" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable DebounceInterval="350" Class="grow" />
+        <MudChipSet T="PersonType?" SelectedValue="_type" SelectedValueChanged="OnTypeChanged" SelectionMode="SelectionMode.ToggleSelection"
+                    CheckMark Variant="Variant.Outlined" Color="Color.Primary">
+            <MudChip T="PersonType?" Value="PersonType.PF">Pessoa física</MudChip>
+            <MudChip T="PersonType?" Value="PersonType.PJ">Pessoa jurídica</MudChip>
+        </MudChipSet>
+    </div>
+    <MudDataGrid @ref="_grid" T="CustomerDto" ServerData="LoadAsync" Dense Hover RowsPerPage="25" Elevation="0" Class="data-grid"
+                 Breakpoint="Breakpoint.None" SortMode="SortMode.Single">
+        <Columns>
+            <PropertyColumn Property="x => x.Name" Title="Cliente">
+                <CellTemplate>
+                    <div class="d-flex align-center gap-3">
+                        <MudAvatar Size="Size.Small" Color="@(context.Item.Type == PersonType.PJ ? Color.Tertiary : Color.Primary)" Variant="Variant.Outlined">
+                            <MudIcon Icon="@(context.Item.Type == PersonType.PJ ? Icons.Material.Outlined.Storefront : Icons.Material.Outlined.Person)" Size="Size.Small" />
+                        </MudAvatar>
+                        <div>
+                            <div class="cell-title">@context.Item.Name</div>
+                            <div class="cell-sub mono">@context.Item.FormattedDocument</div>
+                        </div>
+                    </div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Type" Title="Tipo">
+                <CellTemplate>@(context.Item.Type == PersonType.PF ? "PF" : "PJ")</CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Email" Title="Contato" Sortable="false">
+                <CellTemplate>
+                    <div>@context.Item.Email</div>
+                    <div class="cell-sub">@UiExtensions.Phone(context.Item.Phone)</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Address.City" Title="Cidade" SortBy="x => x.Address.City">
+                <CellTemplate>
+                    <div>@context.Item.Address.City@(context.Item.Address.State is null ? "" : $"/{context.Item.Address.State}")</div>
+                    <div class="cell-sub">@context.Item.Address.District</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.OrderCount" Title="Pedidos" Sortable="false" HeaderClass="text-right" CellClass="text-right num">
+                <CellTemplate><MudLink Href="@($"/pedidos?cliente={context.Item.Id}")">@context.Item.OrderCount</MudLink></CellTemplate>
+            </PropertyColumn>
+            <TemplateColumn Sortable="false" CellClass="text-right nowrap" HeaderStyle="width: 1%">
+                <CellTemplate>
+                    @if (_canManage)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => OpenEditorAsync(context.Item)" aria-label="Editar" />
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context.Item)" aria-label="Excluir" />
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent>
+            <EmptyState Icon="@Icons.Material.Outlined.People" Title="Nenhum cliente encontrado" Description="Ajuste a busca ou cadastre um novo cliente." />
+        </NoRecordsContent>
+        <LoadingContent><PageLoading Text="Carregando clientes..." /></LoadingContent>
+        <PagerContent>
+            <MudDataGridPager T="CustomerDto" PageSizeOptions="[10, 25, 50]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" />
+        </PagerContent>
+    </MudDataGrid>
+</MudPaper>
+
+@code {
+    private readonly List<BreadcrumbItem> _crumbs = [new("Cadastros", null, disabled: true), new("Clientes", null, disabled: true)];
+    private MudDataGrid<CustomerDto> _grid = default!;
+    private string? _search;
+    private PersonType? _type;
+    private bool _canManage;
+
+    protected override void OnInitialized() => _canManage = User.Can(Permission.ManageCustomers);
+
+    private async Task<GridData<CustomerDto>> LoadAsync(GridState<CustomerDto> state, CancellationToken ct)
+    {
+        try
+        {
+            var sort = state.SortDefinitions.FirstOrDefault();
+            var sortBy = sort?.SortBy switch { "Address.City" or "City" => "City", var s => s };
+            var result = await Customers.GetPagedAsync(new CustomerQuery
+            {
+                Page = state.Page, PageSize = state.PageSize, SortBy = sortBy, SortDescending = sort?.Descending ?? false,
+                Search = _search, Type = _type,
+            }, ct);
+            return new GridData<CustomerDto> { Items = result.Items, TotalItems = result.TotalCount };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            return new GridData<CustomerDto> { Items = [], TotalItems = 0 };
+        }
+    }
+
+    private Task OnSearchChanged(string? value) { _search = value; return _grid.ReloadServerData(); }
+    private Task OnTypeChanged(PersonType? value) { _type = value; return _grid.ReloadServerData(); }
+
+    private async Task OpenEditorAsync(CustomerDto? item)
+    {
+        var parameters = new DialogParameters<CustomerDialog> { { x => x.Customer, item } };
+        var dialog = await Dialogs.ShowAsync<CustomerDialog>(item is null ? "Novo cliente" : "Editar cliente", parameters, DialogExtensions.FormOptions);
+        if (await dialog.Result is { Canceled: false }) await _grid.ReloadServerData();
+    }
+
+    private async Task DeleteAsync(CustomerDto item)
+    {
+        if (await Dialogs.ConfirmAsync("Excluir cliente", $"Excluir \"{item.Name}\"? Os pedidos já registrados serão mantidos.") is null) return;
+        if (await Snackbar.RunAsync(() => Customers.DeleteAsync(item.Id), "Cliente excluído.", Logger)) await _grid.ReloadServerData();
+    }
+}

@@ -1,0 +1,36 @@
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icon" Color="Color" />
+            <MudText Typo="Typo.h6">@Title</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudText>@Message</MudText>
+        @if (AskReason)
+        {
+            <MudTextField @bind-Value="_reason" Label="Motivo" Variant="Variant.Outlined" Lines="2" Class="mt-4"
+                          Required RequiredError="Informe o motivo." MaxLength="300" Immediate />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Voltar</MudButton>
+        <MudButton Color="Color" Variant="Variant.Filled" OnClick="Confirm" Disabled="@(AskReason && string.IsNullOrWhiteSpace(_reason))">
+            @ConfirmText
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string Title { get; set; } = "Confirmar";
+    [Parameter] public string Message { get; set; } = "Deseja continuar?";
+    [Parameter] public string ConfirmText { get; set; } = "Confirmar";
+    [Parameter] public Color Color { get; set; } = Color.Error;
+    [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.WarningAmber;
+    [Parameter] public bool AskReason { get; set; }
+
+    private string? _reason;
+
+    private void Confirm() => Dialog.Close(DialogResult.Ok(_reason ?? string.Empty));
+}

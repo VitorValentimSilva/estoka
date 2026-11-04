@@ -1,0 +1,32 @@
+@using Estoka.Domain.Inventory
+
+<MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="ChipColor" Icon="@Icon">@Label</MudChip>
+
+@code {
+    [Parameter] public StockMovementType Type { get; set; }
+
+    private string Label => Type switch
+    {
+        StockMovementType.Entrada => "Entrada",
+        StockMovementType.Saida => "Saída",
+        StockMovementType.Ajuste => "Ajuste",
+        StockMovementType.Devolucao => "Devolução",
+        _ => Type.ToString(),
+    };
+
+    private Color ChipColor => Type switch
+    {
+        StockMovementType.Entrada => Color.Success,
+        StockMovementType.Saida => Color.Info,
+        StockMovementType.Ajuste => Color.Warning,
+        _ => Color.Tertiary,
+    };
+
+    private string Icon => Type switch
+    {
+        StockMovementType.Entrada => Icons.Material.Filled.SouthWest,
+        StockMovementType.Saida => Icons.Material.Filled.NorthEast,
+        StockMovementType.Ajuste => Icons.Material.Filled.Tune,
+        _ => Icons.Material.Filled.Undo,
+    };
+}

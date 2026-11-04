@@ -1,9 +1,129 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+@inject ICurrentUser CurrentUser
+@inject Estoka.Infrastructure.Identity.CurrentUser CurrentUserState
+@inject IOptions<BrandingOptions> Branding
+@inject IOptions<Estoka.Infrastructure.Seed.DemoOptions> Demo
 
-@Body
+<MudThemeProvider Theme="EstokaTheme.Theme" @bind-IsDarkMode="_isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout Class="@(Demo.Value.Enabled ? "has-demo-banner" : null)">
+    @if (Demo.Value.Enabled)
+    {
+        <div class="demo-banner" role="note">
+            <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" />
+            <span class="d-none d-sm-inline">Ambiente de demonstração — dados fictícios, reiniciados diariamente</span>
+            <span class="d-inline d-sm-none">Demonstração · dados fictícios, reiniciados diariamente</span>
+        </div>
+    }
+
+    <MudAppBar Elevation="0" Class="app-bar">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="() => _drawerOpen = !_drawerOpen" aria-label="Abrir menu" />
+        <div class="app-bar__company d-none d-sm-flex">
+            <MudText Typo="Typo.subtitle1" Class="font-weight-bold">@Branding.Value.CompanyName</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@Branding.Value.CompanyCity</MudText>
+        </div>
+        <MudSpacer />
+        <MudTooltip Text="@(_isDarkMode ? "Tema claro" : "Tema escuro")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
+                           Color="Color.Inherit" OnClick="ToggleThemeAsync" aria-label="Alternar tema" />
+        </MudTooltip>
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ml-1" aria-label="Menu do usuário">
+            <ActivatorContent>
+                <div class="user-chip">
+                    <MudAvatar Color="Color.Primary" Size="Size.Medium">@Initials</MudAvatar>
+                    <div class="user-chip__text d-none d-md-flex">
+                        <span class="user-chip__name">@CurrentUser.UserName</span>
+                        <span class="user-chip__role">@RoleLabel</span>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.ExpandMore" Size="Size.Small" Class="d-none d-md-flex" />
+                </div>
+            </ActivatorContent>
+            <ChildContent>
+                <div class="px-4 py-2">
+                    <MudText Typo="Typo.subtitle2">@CurrentUser.UserName</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@RoleLabel</MudText>
+                </div>
+                <MudDivider />
+                <form action="conta/sair" method="post" class="px-2 py-1">
+                    <AntiforgeryToken />
+                    <MudButton ButtonType="ButtonType.Submit" FullWidth StartIcon="@Icons.Material.Filled.Logout"
+                               Class="justify-start" Color="Color.Error" Variant="Variant.Text">
+                        Sair
+                    </MudButton>
+                </form>
+            </ChildContent>
+        </MudMenu>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Never" Elevation="0" Variant="DrawerVariant.Responsive"
+               Breakpoint="Breakpoint.Md" Class="app-drawer">
+        <div class="brand">
+            <img src="favicon.svg" alt="" width="34" height="34" />
+            <div>
+                <div class="brand__name">Estoka</div>
+                <div class="brand__tagline">Estoque &amp; Vendas</div>
+            </div>
+        </div>
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent Class="app-main">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="app-content">
+            @Body
+        </MudContainer>
+        <footer class="app-footer">
+            Projeto fictício desenvolvido para portfólio por
+            <a href="@Branding.Value.AuthorUrl" target="_blank" rel="noopener">@Branding.Value.AuthorName</a>
+            · <a href="@Branding.Value.RepositoryUrl" target="_blank" rel="noopener">código-fonte no GitHub</a>
+        </footer>
+    </MudMainContent>
+</MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    Ocorreu um erro inesperado.
+    <a href="." class="reload">Recarregar</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    [CascadingParameter(Name = "InitialDarkMode")] private bool InitialDarkMode { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private bool _drawerOpen = true;
+    private bool _isDarkMode;
+
+    protected override void OnInitialized()
+    {
+        _isDarkMode = InitialDarkMode;
+        // Garante o usuário do escopo antes de qualquer página consultar os serviços.
+        if (AuthenticationState is { IsCompletedSuccessfully: true } state)
+            CurrentUserState.SetPrincipal(state.Result.User);
+    }
+
+    private string Initials
+    {
+        get
+        {
+            var parts = CurrentUser.UserName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length switch
+            {
+                0 => "?",
+                1 => parts[0][..1].ToUpperInvariant(),
+                _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant(),
+            };
+        }
+    }
+
+    private string RoleLabel => CurrentUser.Roles.FirstOrDefault() ?? string.Empty;
+
+    private async Task ToggleThemeAsync()
+    {
+        _isDarkMode = !_isDarkMode;
+        await JS.InvokeVoidAsync("estoka.setTheme", _isDarkMode ? "dark" : "light");
+    }
+}

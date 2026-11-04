@@ -1,0 +1,120 @@
+@using Estoka.Application.Customers
+@using Estoka.Domain.Common
+@using Estoka.Domain.Customers
+@using FV = FluentValidation
+@inject CustomerService Customers
+@inject FV.IValidator<CustomerInput> Validator
+@inject ISnackbar Snackbar
+@inject ILogger<CustomerDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input" Validation="Validator.ForMudForm()" ValidationDelay="0">
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudToggleGroup T="PersonType" Value="_input.Type" ValueChanged="OnTypeChanged" Color="Color.Primary" Outlined Size="Size.Small">
+                        <MudToggleItem Value="PersonType.PF" Text="Pessoa física" />
+                        <MudToggleItem Value="PersonType.PJ" Text="Pessoa jurídica" />
+                    </MudToggleGroup>
+                </MudItem>
+                <MudItem xs="12" sm="7">
+                    <MudTextField @bind-Value="_input.Name" For="() => _input.Name" Label="@(_input.Type == PersonType.PF ? "Nome completo" : "Razão social")"
+                                  Variant="Variant.Outlined" Required Immediate />
+                </MudItem>
+                <MudItem xs="12" sm="5">
+                    @* Recria o campo ao trocar PF/PJ para aplicar a máscara correta *@
+                    @if (_input.Type == PersonType.PF)
+                    {
+                        <MudTextField @bind-Value="_input.Document" For="() => _input.Document" Label="CPF" Variant="Variant.Outlined" Required
+                                      Mask="UiExtensions.CpfMask" Immediate />
+                    }
+                    else
+                    {
+                        <MudTextField @bind-Value="_input.Document" For="() => _input.Document" Label="CNPJ" Variant="Variant.Outlined" Required
+                                      Mask="UiExtensions.CnpjMask" Immediate />
+                    }
+                </MudItem>
+                <MudItem xs="12" sm="7">
+                    <MudTextField @bind-Value="_input.Email" For="() => _input.Email" Label="E-mail" Variant="Variant.Outlined" InputType="InputType.Email" Immediate />
+                </MudItem>
+                <MudItem xs="12" sm="5">
+                    <MudTextField @bind-Value="_input.Phone" For="() => _input.Phone" Label="Telefone" Variant="Variant.Outlined" Mask="UiExtensions.PhoneMask" Immediate />
+                </MudItem>
+
+                <MudItem xs="12"><MudText Typo="Typo.subtitle2" Class="muted mt-2">Endereço</MudText></MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudTextField @bind-Value="_input.ZipCode" For="() => _input.ZipCode" Label="CEP" Variant="Variant.Outlined" Mask="UiExtensions.CepMask" Immediate />
+                </MudItem>
+                <MudItem xs="12" sm="7">
+                    <MudTextField @bind-Value="_input.Street" For="() => _input.Street" Label="Logradouro" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="5" sm="2">
+                    <MudTextField @bind-Value="_input.Number" For="() => _input.Number" Label="Número" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="7" sm="4">
+                    <MudTextField @bind-Value="_input.Complement" For="() => _input.Complement" Label="Complemento" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudTextField @bind-Value="_input.District" For="() => _input.District" Label="Bairro" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="8" sm="3">
+                    <MudTextField @bind-Value="_input.City" For="() => _input.City" Label="Cidade" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="4" sm="2">
+                    <MudSelect T="string" @bind-Value="_input.State" For="() => _input.State" Label="UF" Variant="Variant.Outlined" Clearable>
+                        @foreach (var uf in BrazilianStates.All)
+                        {
+                            <MudSelectItem T="string" Value="uf">@uf</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_input.Notes" For="() => _input.Notes" Label="Observações" Variant="Variant.Outlined" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">Salvar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public CustomerDto? Customer { get; set; }
+
+    private MudForm _form = default!;
+    private CustomerInput _input = new();
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Customer is null) return;
+        _input = CustomerInput.From(Customer);
+        _input.Document = DocumentValidator.Format(Customer.Document);
+        _input.Phone = UiExtensions.Phone(Customer.Phone);
+        _input.ZipCode = UiExtensions.ZipCode(Customer.Address.ZipCode);
+    }
+
+    private void OnTypeChanged(PersonType type)
+    {
+        if (type == _input.Type) return;
+        _input.Type = type;
+        _input.Document = string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid) return;
+        _saving = true;
+        var ok = await Snackbar.RunAsync(async () =>
+        {
+            if (Customer is not null) await Customers.UpdateAsync(Customer.Id, _input);
+            else await Customers.CreateAsync(_input);
+        }, "Cliente salvo.", Logger);
+        _saving = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+    }
+}
