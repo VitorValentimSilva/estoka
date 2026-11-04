@@ -1,0 +1,47 @@
+@using Estoka.Application.Users
+@using FV = FluentValidation
+@inject IUserAdminService Users
+@inject FV.IValidator<CreateUserInput> Validator
+@inject ISnackbar Snackbar
+@inject ILogger<CreateUserDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input" Validation="Validator.ForMudForm()" ValidationDelay="0">
+            <MudTextField @bind-Value="_input.FullName" For="() => _input.FullName" Label="Nome completo" Variant="Variant.Outlined" Required Immediate Class="mb-3" />
+            <MudTextField @bind-Value="_input.Email" For="() => _input.Email" Label="E-mail" Variant="Variant.Outlined" InputType="InputType.Email" Required Immediate Class="mb-3" />
+            <MudSelect T="string" @bind-Value="_input.Role" For="() => _input.Role" Label="Papel" Variant="Variant.Outlined" Class="mb-3">
+                @foreach (var role in Roles.UserRoles)
+                {
+                    <MudSelectItem T="string" Value="role">@role</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_input.Password" For="() => _input.Password" Label="Senha inicial" Variant="Variant.Outlined" Required Immediate
+                          InputType="@(_showPassword ? InputType.Text : InputType.Password)" Adornment="Adornment.End"
+                          AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="() => _showPassword = !_showPassword" HelperText="Mín. 8 caracteres, com maiúscula, minúscula, número e símbolo" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">Criar usuário</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private MudForm _form = default!;
+    private readonly CreateUserInput _input = new();
+    private bool _saving;
+    private bool _showPassword;
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid) return;
+        _saving = true;
+        var ok = await Snackbar.RunAsync(() => Users.CreateAsync(_input), "Usuário criado.", Logger);
+        _saving = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+    }
+}

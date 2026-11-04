@@ -1,0 +1,119 @@
+@page "/auditoria"
+@attribute [Authorize(Policy = Policies.ViewAudit)]
+@using Estoka.Application.Auditing
+@using Estoka.Domain.Auditing
+@inject AuditService Audit
+@inject ISnackbar Snackbar
+
+<PageHeader Title="Auditoria" Subtitle="Quem alterou o quê e quando — gerado automaticamente a cada gravação" Breadcrumbs="_crumbs" />
+
+<MudPaper Elevation="0" Class="card">
+    <div class="toolbar">
+        <MudSelect T="string" Value="_entity" ValueChanged="OnEntityChanged" Placeholder="Todas as entidades" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   Clearable Dense ToStringFunc="@(e => e is null ? "" : AuditService.EntityLabels.GetValueOrDefault(e, e))">
+            @foreach (var (key, label) in AuditService.EntityLabels)
+            {
+                <MudSelectItem T="string" Value="key">@label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="AuditAction?" Value="_action" ValueChanged="OnActionChanged" Placeholder="Todas as ações" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable Dense>
+            @foreach (var a in Enum.GetValues<AuditAction>())
+            {
+                <MudSelectItem T="AuditAction?" Value="a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="string" Value="_user" ValueChanged="OnUserChanged" Placeholder="Todos os usuários" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable Dense>
+            @foreach (var u in _users)
+            {
+                <MudSelectItem T="string" Value="u">@u</MudSelectItem>
+            }
+        </MudSelect>
+        <MudDateRangePicker DateRange="_range" DateRangeChanged="OnRangeChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
+                            PlaceholderStart="De" PlaceholderEnd="Até" Clearable AutoClose Culture="UiExtensions.PtBr" />
+    </div>
+
+    <MudDataGrid @ref="_grid" T="AuditEntryDto" ServerData="LoadAsync" Dense Hover RowsPerPage="25" Elevation="0" Class="data-grid"
+                 Breakpoint="Breakpoint.None" SortMode="SortMode.None">
+        <Columns>
+            <HierarchyColumn T="AuditEntryDto" />
+            <PropertyColumn Property="x => x.Timestamp" Title="Quando" CellClass="nowrap"><CellTemplate>@context.Item.Timestamp.Local("dd/MM/yyyy HH:mm:ss")</CellTemplate></PropertyColumn>
+            <PropertyColumn Property="x => x.UserName" Title="Usuário" CellClass="nowrap" />
+            <PropertyColumn Property="x => x.Action" Title="Ação">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                             Color="@(context.Item.Action switch { AuditAction.Criado => Color.Success, AuditAction.Excluido => Color.Error, _ => Color.Info })">
+                        @context.Item.Action
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.EntityLabel" Title="Registro">
+                <CellTemplate>
+                    <div class="cell-title">@context.Item.EntityLabel</div>
+                    <div class="cell-sub">@(context.Item.Description ?? context.Item.EntityId)</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Changes" Title="Alterações">
+                <CellTemplate><span class="muted">@string.Join(", ", context.Item.Changes.Select(c => c.Field).Take(4))@(context.Item.Changes.Count > 4 ? "…" : "")</span></CellTemplate>
+            </PropertyColumn>
+        </Columns>
+        <ChildRowContent>
+            <div class="diff">
+                <MudSimpleTable Dense Elevation="0">
+                    <thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in context.Item.Changes)
+                        {
+                            <tr>
+                                <td class="cell-title">@c.Field</td>
+                                <td><span class="diff__old">@(c.OldValue ?? "—")</span></td>
+                                <td><span class="diff__new">@(c.NewValue ?? "—")</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+        </ChildRowContent>
+        <NoRecordsContent><EmptyState Icon="@Icons.Material.Outlined.History" Title="Nenhum registro de auditoria" Description="Ajuste os filtros." /></NoRecordsContent>
+        <LoadingContent><PageLoading Text="Carregando auditoria..." /></LoadingContent>
+        <PagerContent><MudDataGridPager T="AuditEntryDto" PageSizeOptions="[25, 50, 100]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" /></PagerContent>
+    </MudDataGrid>
+</MudPaper>
+
+@code {
+    private readonly List<BreadcrumbItem> _crumbs = [new("Administração", null, disabled: true), new("Auditoria", null, disabled: true)];
+    private MudDataGrid<AuditEntryDto> _grid = default!;
+    private IReadOnlyList<string> _users = [];
+    private string? _entity;
+    private string? _user;
+    private AuditAction? _action;
+    private DateRange? _range;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _users = await Audit.UsersAsync(); } catch (Exception ex) { Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error); }
+    }
+
+    private async Task<GridData<AuditEntryDto>> LoadAsync(GridState<AuditEntryDto> state, CancellationToken ct)
+    {
+        try
+        {
+            var result = await Audit.GetPagedAsync(new AuditQuery
+            {
+                Page = state.Page, PageSize = state.PageSize, EntityName = _entity, Action = _action, UserName = _user,
+                From = _range?.Start is { } s ? DateOnly.FromDateTime(s) : null,
+                To = _range?.End is { } e ? DateOnly.FromDateTime(e) : null,
+            }, ct);
+            return new GridData<AuditEntryDto> { Items = result.Items, TotalItems = result.TotalCount };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            return new GridData<AuditEntryDto> { Items = [], TotalItems = 0 };
+        }
+    }
+
+    private Task OnEntityChanged(string? v) { _entity = v; return _grid.ReloadServerData(); }
+    private Task OnActionChanged(AuditAction? v) { _action = v; return _grid.ReloadServerData(); }
+    private Task OnUserChanged(string? v) { _user = v; return _grid.ReloadServerData(); }
+    private Task OnRangeChanged(DateRange? v) { _range = v; return _grid.ReloadServerData(); }
+}

@@ -1,0 +1,128 @@
+@page "/usuarios"
+@attribute [Authorize(Policy = Policies.ManageUsers)]
+@using Estoka.Application.Users
+@inject IUserAdminService Users
+@inject ICurrentUser User
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject ILogger<UsersPage> Logger
+
+<PageHeader Title="Usuários" Subtitle="Quem acessa o painel e com qual perfil" Breadcrumbs="_crumbs">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="CreateAsync">Novo usuário</MudButton>
+    </Actions>
+</PageHeader>
+
+<MudGrid Spacing="3" Class="mb-1">
+    @foreach (var role in Roles.UserRoles)
+    {
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Class="card pa-4 role-card">
+                <div class="d-flex align-center gap-2 mb-1">
+                    <MudIcon Icon="@RoleIcon(role)" Color="Color.Primary" Size="Size.Small" />
+                    <span class="cell-title">@role</span>
+                    <MudSpacer />
+                    <span class="muted">@(_users?.Count(u => u.Role == role && u.IsActive) ?? 0) ativo(s)</span>
+                </div>
+                <div class="cell-sub">@RoleDescription(role)</div>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+<MudPaper Elevation="0" Class="card">
+    @if (_users is null)
+    {
+        <PageLoading />
+    }
+    else
+    {
+        <MudDataGrid T="UserDto" Items="_users" Dense Hover Elevation="0" Class="data-grid" Breakpoint="Breakpoint.None">
+            <Columns>
+                <PropertyColumn Property="x => x.FullName" Title="Usuário">
+                    <CellTemplate>
+                        <div class="d-flex align-center gap-3">
+                            <MudAvatar Size="Size.Small" Color="@(context.Item.IsActive ? Color.Primary : Color.Default)">@Initials(context.Item.FullName)</MudAvatar>
+                            <div>
+                                <div class="cell-title">@context.Item.FullName @(context.Item.Id == User.UserId ? "(você)" : "")</div>
+                                <div class="cell-sub">@context.Item.Email</div>
+                            </div>
+                        </div>
+                    </CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.Role" Title="Papel">
+                    <CellTemplate>
+                        <MudSelect T="string" Value="context.Item.Role" ValueChanged="r => ChangeRoleAsync(context.Item, r)" Dense Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" Disabled="@(context.Item.Id == User.UserId)" Style="min-width: 150px" aria-label="Papel">
+                            @foreach (var role in Roles.UserRoles)
+                            {
+                                <MudSelectItem T="string" Value="role">@role</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.CreatedAt" Title="Criado em" CellClass="nowrap muted">
+                    <CellTemplate>@context.Item.CreatedAt.Local("dd/MM/yyyy")</CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.IsActive" Title="Situação">
+                    <CellTemplate>
+                        <MudSwitch T="bool" Value="context.Item.IsActive" ValueChanged="v => SetActiveAsync(context.Item, v)" Color="Color.Success"
+                                   Disabled="@(context.Item.Id == User.UserId)" Label="@(context.Item.IsActive ? "Ativo" : "Desativado")" />
+                    </CellTemplate>
+                </PropertyColumn>
+            </Columns>
+        </MudDataGrid>
+    }
+</MudPaper>
+
+@code {
+    private readonly List<BreadcrumbItem> _crumbs = [new("Administração", null, disabled: true), new("Usuários", null, disabled: true)];
+    private IReadOnlyList<UserDto>? _users;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try { _users = await Users.ListAsync(); }
+        catch (Exception ex) { Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error); _users = []; }
+    }
+
+    private static string Initials(string name)
+    {
+        var p = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return p.Length == 0 ? "?" : (p[0][..1] + (p.Length > 1 ? p[^1][..1] : "")).ToUpperInvariant();
+    }
+
+    private static string RoleIcon(string role) => role switch
+    {
+        Roles.Admin => Icons.Material.Outlined.AdminPanelSettings,
+        Roles.Gerente => Icons.Material.Outlined.ManageAccounts,
+        _ => Icons.Material.Outlined.PointOfSale,
+    };
+
+    private static string RoleDescription(string role) => role switch
+    {
+        Roles.Admin => "Acesso total, inclusive gestão de usuários.",
+        Roles.Gerente => "Tudo, exceto usuários: cadastros, custos, estoque, relatórios e auditoria.",
+        _ => "Clientes e pedidos; vê produtos e estoque, sem custo nem margem.",
+    };
+
+    private async Task CreateAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<CreateUserDialog>("Novo usuário", DialogExtensions.SmallOptions);
+        if (await dialog.Result is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task ChangeRoleAsync(UserDto user, string role)
+    {
+        if (await Snackbar.RunAsync(() => Users.ChangeRoleAsync(user.Id, role), $"{user.FullName} agora é {role}.", Logger)) await LoadAsync();
+    }
+
+    private async Task SetActiveAsync(UserDto user, bool active)
+    {
+        if (!active && await Dialogs.ConfirmAsync("Desativar usuário", $"{user.FullName} perderá o acesso imediatamente. Continuar?", "Desativar") is null)
+            return;
+        await Snackbar.RunAsync(() => Users.SetActiveAsync(user.Id, active), active ? "Usuário reativado." : "Usuário desativado.", Logger);
+        await LoadAsync();
+    }
+}
