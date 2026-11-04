@@ -1,0 +1,233 @@
+@page "/relatorios"
+@attribute [Authorize(Policy = Policies.ViewReports)]
+@using Estoka.Application.Reports
+@using Estoka.Application.Sales
+@inject ReportService Reports
+@inject ICurrentUser User
+@inject ISnackbar Snackbar
+@inject ILogger<ReportsPage> Logger
+
+<PageHeader Title="Relatórios" Subtitle="Análises de vendas e estoque, com exportação para Excel e PDF" Breadcrumbs="_crumbs" />
+
+<MudPaper Elevation="0" Class="card">
+    <MudTabs ActivePanelIndex="_tab" Elevation="0" ApplyEffectsToContainer Rounded Class="report-tabs"
+             ActivePanelIndexChanged="OnTabChanged">
+        <MudTabPanel Text="Vendas por período" Icon="@Icons.Material.Outlined.Timeline" />
+        <MudTabPanel Text="Curva ABC" Icon="@Icons.Material.Outlined.StackedBarChart" />
+        <MudTabPanel Text="Posição de estoque" Icon="@Icons.Material.Outlined.Inventory" />
+    </MudTabs>
+
+    <div class="toolbar report-toolbar">
+        @if (_tab != 2)
+        {
+            <MudDateRangePicker DateRange="_range" DateRangeChanged="OnRangeChanged" Label="Período" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                AutoClose Culture="UiExtensions.PtBr" />
+            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary">
+                <MudButton OnClick="() => SetDaysAsync(7)">7 dias</MudButton>
+                <MudButton OnClick="() => SetDaysAsync(30)">30 dias</MudButton>
+                <MudButton OnClick="() => SetDaysAsync(90)">90 dias</MudButton>
+            </MudButtonGroup>
+        }
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Custom.FileFormats.FileExcel" Href="@ExportUrl("xlsx")" Target="_blank">Excel</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Custom.FileFormats.FilePdf" Href="@ExportUrl("pdf")" Target="_blank">PDF</MudButton>
+    </div>
+    <MudDivider />
+
+    <div class="pa-4">
+        @if (_loading)
+        {
+            <PageLoading Text="Gerando relatório..." />
+        }
+        else if (_tab == 0 && _sales is not null)
+        {
+            <MudGrid Spacing="3" Class="mb-2">
+                <MudItem xs="6" md="3"><KpiCard Label="Faturamento líquido" Value="@_sales.Net.Money()" Icon="@Icons.Material.Outlined.Payments" /></MudItem>
+                <MudItem xs="6" md="3"><KpiCard Label="Pedidos" Value="@_sales.Orders.ToString("N0", UiExtensions.PtBr)" Icon="@Icons.Material.Outlined.ReceiptLong" Accent="#6366F1" /></MudItem>
+                <MudItem xs="6" md="3"><KpiCard Label="Ticket médio" Value="@_sales.AverageTicket.Money()" Icon="@Icons.Material.Outlined.ShoppingBasket" Accent="#0EA5E9" /></MudItem>
+                <MudItem xs="6" md="3">
+                    @if (_sales.IncludesCost)
+                    {
+                        <KpiCard Label="Margem bruta" Value="@((_sales.Net - _sales.Cost).Money())" Icon="@Icons.Material.Outlined.Savings" Accent="#16A34A"
+                                 Hint="@(_sales.Net == 0 ? "" : $"{(_sales.Net - _sales.Cost) / _sales.Net * 100:0.0}% sobre o líquido")" />
+                    }
+                    else
+                    {
+                        <KpiCard Label="Descontos concedidos" Value="@_sales.Discounts.Money()" Icon="@Icons.Material.Outlined.Sell" Accent="#D97706" />
+                    }
+                </MudItem>
+            </MudGrid>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" lg="8">
+                    <MudText Typo="Typo.subtitle1" Class="section-title">Faturamento diário</MudText>
+                    <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_salesSeries" ChartLabels="_salesLabels" ChartOptions="_barOptions" Height="280px" Width="100%" />
+                </MudItem>
+                <MudItem xs="12" lg="4">
+                    <MudText Typo="Typo.subtitle1" Class="section-title">Por forma de pagamento</MudText>
+                    <MudSimpleTable Dense Elevation="0">
+                        <thead><tr><th>Forma</th><th class="text-right">Pedidos</th><th class="text-right">Total</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in _sales.ByPayment)
+                            {
+                                <tr><td>@p.Method.Label()</td><td class="text-right num">@p.Orders</td><td class="text-right num nowrap">@p.Total.Money()</td></tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudItem>
+            </MudGrid>
+        }
+        else if (_tab == 1 && _abc is not null)
+        {
+            <div class="abc-summary">
+                @foreach (var c in "ABC")
+                {
+                    var share = _abc.Revenue == 0 ? 0 : _abc.RevenueOf(c) / _abc.Revenue * 100;
+                    <div class="abc-summary__item abc-@c">
+                        <div class="abc-summary__class">@c</div>
+                        <div>
+                            <div class="cell-title">@_abc.Count(c) produtos</div>
+                            <div class="cell-sub">@_abc.RevenueOf(c).Money() · @share.ToString("0.0", UiExtensions.PtBr)% do faturamento</div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <MudDataGrid T="AbcRow" Items="_abc.Rows" Dense Hover Elevation="0" Class="data-grid" Breakpoint="Breakpoint.None" RowsPerPage="25">
+                <Columns>
+                    <PropertyColumn Property="x => x.Rank" Title="#" CellClass="muted num" />
+                    <PropertyColumn Property="x => x.Name" Title="Produto" CellStyle="min-width: 300px">
+                        <CellTemplate><div class="cell-title">@context.Item.Name</div><div class="cell-sub"><span class="mono">@context.Item.Sku</span> · @context.Item.Category</div></CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.Quantity" Title="Qtd." HeaderClass="text-right" CellClass="text-right num"><CellTemplate>@context.Item.Quantity.Qty()</CellTemplate></PropertyColumn>
+                    <PropertyColumn Property="x => x.Revenue" Title="Faturamento" HeaderClass="text-right" CellClass="text-right num nowrap"><CellTemplate>@context.Item.Revenue.Money()</CellTemplate></PropertyColumn>
+                    <PropertyColumn Property="x => x.SharePercent" Title="% do total" HeaderClass="text-right" CellClass="text-right num"><CellTemplate>@context.Item.SharePercent.ToString("0.00", UiExtensions.PtBr)%</CellTemplate></PropertyColumn>
+                    <PropertyColumn Property="x => x.CumulativePercent" Title="% acumulado" CellStyle="min-width: 160px">
+                        <CellTemplate>
+                            <div class="d-flex align-center gap-2">
+                                <MudProgressLinear Value="(double)context.Item.CumulativePercent" Color="Color.Primary" Size="Size.Small" Rounded Style="width: 90px" />
+                                <span class="num">@context.Item.CumulativePercent.ToString("0.0", UiExtensions.PtBr)%</span>
+                            </div>
+                        </CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.Class" Title="Classe" CellClass="text-center"><CellTemplate><span class="abc-badge abc-@context.Item.Class">@context.Item.Class</span></CellTemplate></PropertyColumn>
+                </Columns>
+                <NoRecordsContent><EmptyState Icon="@Icons.Material.Outlined.StackedBarChart" Title="Sem vendas no período" /></NoRecordsContent>
+                <PagerContent><MudDataGridPager T="AbcRow" PageSizeOptions="[25, 50, 100]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" /></PagerContent>
+            </MudDataGrid>
+        }
+        else if (_tab == 2 && _stock is not null)
+        {
+            <MudGrid Spacing="3" Class="mb-2">
+                <MudItem xs="6" md="3"><KpiCard Label="Produtos" Value="@_stock.Rows.Count.ToString()" Icon="@Icons.Material.Outlined.Inventory2" /></MudItem>
+                <MudItem xs="6" md="3"><KpiCard Label="Abaixo do mínimo" Value="@_stock.BelowMinimum.ToString()" Icon="@Icons.Material.Outlined.WarningAmber" Accent="#D97706" /></MudItem>
+                <MudItem xs="6" md="3"><KpiCard Label="Valor (preço de venda)" Value="@_stock.SaleValue.Money()" Icon="@Icons.Material.Outlined.Sell" Accent="#6366F1" /></MudItem>
+                @if (_stock.CostValue is { } cost)
+                {
+                    <MudItem xs="6" md="3"><KpiCard Label="Valor (custo)" Value="@cost.Money()" Icon="@Icons.Material.Outlined.AccountBalanceWallet" Accent="#16A34A" /></MudItem>
+                }
+            </MudGrid>
+            <MudDataGrid T="StockPositionRow" Items="_stock.Rows" Dense Hover Elevation="0" Class="data-grid" Breakpoint="Breakpoint.None" RowsPerPage="25"
+                         Groupable="false">
+                <Columns>
+                    <PropertyColumn Property="x => x.Sku" Title="SKU" CellClass="mono nowrap" />
+                    <PropertyColumn Property="x => x.Name" Title="Produto" CellStyle="min-width: 280px">
+                        <CellTemplate><div class="cell-title">@context.Item.Name</div><div class="cell-sub">@context.Item.Category</div></CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.CurrentStock" Title="Saldo" HeaderClass="text-right" CellClass="text-right num nowrap">
+                        <CellTemplate><span class="@(context.Item.IsBelowMinimum && context.Item.IsActive ? "qty-warn" : "")">@context.Item.CurrentStock.Qty() @context.Item.Unit.Abbreviation()</span></CellTemplate>
+                    </PropertyColumn>
+                    <PropertyColumn Property="x => x.MinimumStock" Title="Mínimo" HeaderClass="text-right" CellClass="text-right num muted"><CellTemplate>@context.Item.MinimumStock.Qty()</CellTemplate></PropertyColumn>
+                    <PropertyColumn Property="x => x.SaleValue" Title="Valor (venda)" HeaderClass="text-right" CellClass="text-right num nowrap"><CellTemplate>@context.Item.SaleValue.Money()</CellTemplate></PropertyColumn>
+                    @if (_stock.IncludesCost)
+                    {
+                        <PropertyColumn Property="x => x.CostValue" Title="Valor (custo)" HeaderClass="text-right" CellClass="text-right num nowrap muted"><CellTemplate>@context.Item.CostValue.Money()</CellTemplate></PropertyColumn>
+                    }
+                </Columns>
+                <PagerContent><MudDataGridPager T="StockPositionRow" PageSizeOptions="[25, 50, 100]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" /></PagerContent>
+            </MudDataGrid>
+        }
+    </div>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "aba")] public int? TabQuery { get; set; }
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Análise", null, disabled: true), new("Relatórios", null, disabled: true)];
+    private int _tab;
+    private DateRange _range = new();
+    private bool _loading = true;
+    private SalesReport? _sales;
+    private AbcReport? _abc;
+    private StockPositionReport? _stock;
+    private List<ChartSeries<double>> _salesSeries = [];
+    private string[] _salesLabels = [];
+
+    private readonly BarChartOptions _barOptions = new()
+    {
+        ChartPalette = ["#0F766E"], ShowLegend = false, YAxisLines = true, XAxisLines = false, MaxNumYAxisTicks = 6,
+        YAxisToStringFunc = v => v >= 1000 ? $"R$ {v / 1000:0.#} mil" : $"R$ {v:0}",
+    };
+
+    private ReportPeriod Period => new(DateOnly.FromDateTime(_range.Start!.Value), DateOnly.FromDateTime(_range.End!.Value));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var p = Reports.DefaultPeriod();
+        _range = new DateRange(p.From.ToDateTime(TimeOnly.MinValue), p.To.ToDateTime(TimeOnly.MinValue));
+        _tab = Math.Clamp(TabQuery ?? 0, 0, 2);
+        await LoadAsync();
+    }
+
+    private string ExportUrl(string format)
+    {
+        var kind = _tab switch { 0 => "vendas", 1 => "curva-abc", _ => "estoque" };
+        return $"/relatorios/exportar/{kind}.{format}?de={Period.From:yyyy-MM-dd}&ate={Period.To:yyyy-MM-dd}";
+    }
+
+    private Task OnTabChanged(int tab) { _tab = tab; return LoadAsync(); }
+
+    private async Task OnRangeChanged(DateRange range)
+    {
+        if (range?.Start is null || range.End is null) return;
+        _range = range;
+        await LoadAsync();
+    }
+
+    private Task SetDaysAsync(int days)
+    {
+        var today = BrazilTime.Today(TimeProvider.System).ToDateTime(TimeOnly.MinValue);
+        _range = new DateRange(today.AddDays(-(days - 1)), today);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            switch (_tab)
+            {
+                case 0:
+                    _sales = await Reports.SalesAsync(Period);
+                    var step = Math.Max(1, _sales.Days.Count / 10);
+                    _salesLabels = _sales.Days.Select((d, i) => i % step == 0 ? d.Date.ToString("dd/MM", UiExtensions.PtBr) : string.Empty).ToArray();
+                    _salesSeries = [new ChartSeries<double> { Name = "Faturamento", Data = new ChartData<double>(_sales.Days.Select(d => (double)d.Net).ToList()) }];
+                    break;
+                case 1:
+                    _abc = await Reports.AbcAsync(Period);
+                    break;
+                default:
+                    _stock = await Reports.StockPositionAsync();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Falha ao gerar relatório");
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
