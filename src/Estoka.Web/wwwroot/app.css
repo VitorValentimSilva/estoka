@@ -243,3 +243,23 @@ body.estoka-dark .kpi__change.is-down { color: #FCA5A5; }
   .kpi__foot { font-size: 12px; }
 }
 .info-grid > div { min-width: 0; overflow-wrap: anywhere; }
+
+/* ===== Relatórios ===== */
+.report-tabs .mud-tabs-tabbar { border-bottom: 1px solid var(--mud-palette-lines-default); }
+.report-tabs .mud-tabs-panels { display: none; }
+.report-toolbar > .mud-picker { flex: 0 1 300px; }
+.abc-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.abc-summary__item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--mud-palette-lines-default); }
+.abc-summary__class { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 20px; color: #fff; }
+.abc-A .abc-summary__class, .abc-badge.abc-A { background: #16A34A; }
+.abc-B .abc-summary__class, .abc-badge.abc-B { background: #D97706; }
+.abc-C .abc-summary__class, .abc-badge.abc-C { background: #DC2626; }
+.abc-badge { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: #fff; font-weight: 800; font-size: 13px; }
+
+/* ===== Auditoria / usuários ===== */
+.diff { padding: 8px 16px 16px 56px; background: var(--mud-palette-background-gray); }
+.diff__old { background: rgba(220,38,38,.10); color: #B91C1C; padding: 1px 6px; border-radius: 6px; text-decoration: line-through; }
+.diff__new { background: rgba(22,163,74,.12); color: #15803D; padding: 1px 6px; border-radius: 6px; }
+body.estoka-dark .diff__old { color: #FCA5A5; }
+body.estoka-dark .diff__new { color: #86EFAC; }
+.role-card { height: 100%; }

@@ -36,13 +36,20 @@ public sealed class IdentitySeeder(
             }
             else
             {
-                // A demo é pública: restaura o estado padrão caso alguém tenha mexido.
-                user.IsActive = true;
-                user.FullName = fullName;
-                user.LockoutEnd = null;
-                await userManager.UpdateAsync(user);
-                var token = await userManager.GeneratePasswordResetTokenAsync(user);
-                await userManager.ResetPasswordAsync(user, token, password);
+                // A demo é pública: restaura o estado padrão caso alguém tenha mexido — só quando necessário,
+                // para não trocar o security stamp (o que derrubaria as sessões abertas a cada reinício).
+                if (!user.IsActive || user.FullName != fullName || user.LockoutEnd is not null)
+                {
+                    user.IsActive = true;
+                    user.FullName = fullName;
+                    user.LockoutEnd = null;
+                    await userManager.UpdateAsync(user);
+                }
+                if (!await userManager.CheckPasswordAsync(user, password))
+                {
+                    var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                    await userManager.ResetPasswordAsync(user, token, password);
+                }
             }
 
             var roles = await userManager.GetRolesAsync(user);

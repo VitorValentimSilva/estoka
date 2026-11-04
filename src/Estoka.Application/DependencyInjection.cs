@@ -1,7 +1,9 @@
+using Estoka.Application.Auditing;
 using Estoka.Application.Catalog;
 using Estoka.Application.Customers;
 using Estoka.Application.Dashboard;
 using Estoka.Application.Inventory;
+using Estoka.Application.Reports;
 using Estoka.Application.Sales;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +24,8 @@ public static class DependencyInjection
         services.AddScoped<StockService>();
         services.AddScoped<SalesOrderService>();
         services.AddScoped<DashboardService>();
+        services.AddScoped<ReportService>();
+        services.AddScoped<AuditService>();
         return services;
     }
 }

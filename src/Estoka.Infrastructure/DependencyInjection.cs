@@ -57,6 +57,8 @@ public static class DependencyInjection
         // QuestPDF: licença Community (gratuita para empresas com receita anual < US$ 1 mi e projetos open source).
         QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
         services.AddSingleton<IOrderDocumentRenderer, OrderPdfRenderer>();
+        services.AddSingleton<Application.Reports.IReportExporter, ReportExporter>();
+        services.AddScoped<Application.Users.IUserAdminService, UserAdminService>();
 
         services.Configure<DemoOptions>(configuration.GetSection(DemoOptions.Section));
         services.AddScoped<IdentitySeeder>();
