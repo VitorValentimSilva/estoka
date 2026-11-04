@@ -62,6 +62,7 @@ builder.Services.AddDataProtection()
 
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
 // HTML com acentos em UTF-8 (sem &#xE1;): páginas menores e mais legíveis.
 builder.Services.Configure<Microsoft.Extensions.WebEncoders.WebEncoderOptions>(o =>
     o.TextEncoderSettings = new System.Text.Encodings.Web.TextEncoderSettings(System.Text.Unicode.UnicodeRanges.All));
@@ -91,11 +92,14 @@ var app = builder.Build();
 await DatabaseInitializer.InitializeAsync(app.Services);
 
 app.UseForwardedHeaders();
-if (!app.Environment.IsDevelopment())
+// API e downloads respondem ProblemDetails (IExceptionHandler); páginas vão para /erro.
+// Sem UseHttpsRedirection/HSTS: o HTTPS termina no proxy (Render).
+app.UseExceptionHandler(new ExceptionHandlerOptions
 {
-    app.UseExceptionHandler("/erro", createScopeForErrors: true);
-    // Sem UseHttpsRedirection/HSTS: o HTTPS é responsabilidade do proxy (Render).
-}
+    ExceptionHandlingPath = "/erro",
+    CreateScopeForErrors = true,
+    AllowStatusCode404Response = true,
+});
 
 app.UseRequestLocalization("pt-BR");
 app.UseStatusCodePagesWithReExecute("/nao-encontrado", createScopeForStatusCodePages: true);
@@ -117,6 +121,7 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
     ResponseWriter = HealthResponseWriter.WriteAsync,
 }).AllowAnonymous();
 app.MapAccountEndpoints();
+app.MapDocumentEndpoints();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
