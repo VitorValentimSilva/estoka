@@ -1,5 +1,6 @@
 using Estoka.Application.Catalog;
 using Estoka.Application.Customers;
+using Estoka.Application.Dashboard;
 using Estoka.Application.Inventory;
 using Estoka.Application.Sales;
 using FluentValidation;
@@ -20,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<CustomerService>();
         services.AddScoped<StockService>();
         services.AddScoped<SalesOrderService>();
+        services.AddScoped<DashboardService>();
         return services;
     }
 }

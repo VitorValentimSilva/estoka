@@ -1,5 +1,7 @@
 using Estoka.Application.Abstractions;
+using Estoka.Application.Sales;
 using Estoka.Application.Security;
+using Estoka.Infrastructure.Exports;
 using Estoka.Infrastructure.Identity;
 using Estoka.Infrastructure.Persistence;
 using Estoka.Infrastructure.Persistence.Interceptors;
@@ -51,6 +53,10 @@ public static class DependencyInjection
             .AddClaimsPrincipalFactory<AppClaimsPrincipalFactory>()
             .AddDefaultTokenProviders()
             .AddErrorDescriber<PortugueseIdentityErrorDescriber>();
+
+        // QuestPDF: licença Community (gratuita para empresas com receita anual < US$ 1 mi e projetos open source).
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+        services.AddSingleton<IOrderDocumentRenderer, OrderPdfRenderer>();
 
         services.Configure<DemoOptions>(configuration.GetSection(DemoOptions.Section));
         services.AddScoped<IdentitySeeder>();
