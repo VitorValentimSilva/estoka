@@ -39,4 +39,19 @@ Legenda: ✅ feito · 🚧 em andamento · ⏳ pendente
 - ✅ ProblemDetails para erros em downloads/API
 - ✅ E2E com Playwright (`tests/e2e/pedido-vendedor.cjs`): Vendedor cria e confirma pedido e o estoque baixa
 - ✅ Testes de integração: dashboard consistente com os pedidos, PDF autenticado, 404 em ProblemDetails
-## Fase 4 — Relatórios, auditoria, API, Docker, prints e documentação 🚧
+## Fase 4 — Relatórios, auditoria, API, Docker, prints e documentação ✅
+- ✅ Relatórios: vendas por período (diário + forma de pagamento + margem), curva ABC, posição de estoque — Excel (ClosedXML) e PDF (QuestPDF)
+- ✅ Usuários (Admin): listar, criar, mudar papel, ativar/desativar (security stamp derruba sessões), com auditoria
+- ✅ Auditoria (Admin/Gerente): filtros por entidade, ação, usuário e período; diff antes/depois
+- ✅ API REST `/api/v1` com API key (`X-Api-Key`), ProblemDetails, OpenAPI nativo (`/openapi/v1.json`) e Scalar (`/scalar`)
+- ✅ Dockerfile multi-stage (sdk → aspnet, usuário não-root), `.dockerignore`, `docker-compose.yml`, `render.yaml`
+- ✅ Imagem testada: `docker build` + container contra o Postgres local (PORT, URI de conexão, forwarded headers, WebSockets, PDF/Excel, E2E)
+- ✅ Prints em `docs/screenshots` (1440px e 390px, claro e escuro) revisados e ajustados
+- ✅ README (PT + seção em inglês), CLAUDE.md
+
+## Verificação final
+- ✅ `dotnet build` sem warnings · `dotnet test` 88 testes (45 unitários + 43 integração) passando
+- ✅ E2E Playwright do Vendedor (local e no container)
+
+## Falta / próximos passos (v2)
+- NF-e (emissão via provedor), multiempresa, leitor de código de barras, app mobile/PWA, CI no GitHub Actions
