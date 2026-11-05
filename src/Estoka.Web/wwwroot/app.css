@@ -266,3 +266,9 @@ body.estoka-dark .diff__new { color: #86EFAC; }
 .order-lines__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
 .order-lines__row:last-child { border-bottom: 0; }
 @media (max-width: 600px) { .sales-chart { margin-top: -24px; } }
+/* Colunas secundárias somem no celular (o dado aparece embaixo do nome) */
+.show-xs { display: none; }
+@media (max-width: 600px) {
+  .hide-xs { display: none !important; }
+  .show-xs { display: inline; }
+}

@@ -83,18 +83,25 @@ public sealed class ProductService(
         return (p.CostPrice, p.MarginPercent);
     }
 
-    public async Task<IReadOnlyList<ProductPick>> SearchForSaleAsync(string? term, int take = 15, CancellationToken ct = default)
+    public Task<IReadOnlyList<ProductPick>> SearchForSaleAsync(string? term, int take = 15, CancellationToken ct = default)
+        => SearchAsync(term, take, includeInactive: false, ct);
+
+    /// <summary>Busca para movimentação de estoque: inclui inativos (ex.: repor um produto antes de reativá-lo).</summary>
+    public Task<IReadOnlyList<ProductPick>> SearchForStockAsync(string? term, int take = 15, CancellationToken ct = default)
+        => SearchAsync(term, take, includeInactive: true, ct);
+
+    private async Task<IReadOnlyList<ProductPick>> SearchAsync(string? term, int take, bool includeInactive, CancellationToken ct)
     {
         user.Demand(Permission.ViewCatalog);
         await using var db = await dbFactory.CreateAsync(ct);
-        var q = db.Products.AsNoTracking().Where(p => p.IsActive);
+        var q = db.Products.AsNoTracking().Where(p => includeInactive || p.IsActive);
         if (!string.IsNullOrWhiteSpace(term))
         {
             var like = Text.Like(term);
             q = q.Where(p => EF.Functions.ILike(p.Name, like) || EF.Functions.ILike(p.Sku, like));
         }
         return await q.OrderBy(p => p.Name).Take(take)
-            .Select(p => new ProductPick(p.Id, p.Sku, p.Name, p.SalePrice, p.CurrentStock, p.Unit))
+            .Select(p => new ProductPick(p.Id, p.Sku, p.Name, p.SalePrice, p.CurrentStock, p.Unit, p.IsActive))
             .ToListAsync(ct);
     }
 

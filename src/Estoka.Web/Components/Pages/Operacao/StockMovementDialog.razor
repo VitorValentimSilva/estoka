@@ -19,7 +19,7 @@
                     <ItemTemplate Context="p">
                         <div class="d-flex justify-space-between align-center gap-4" style="width: 100%">
                             <div>
-                                <div class="cell-title">@p.Name</div>
+                                <div class="cell-title">@p.Name @(p.IsActive ? "" : "(inativo)")</div>
                                 <div class="cell-sub mono">@p.Sku</div>
                             </div>
                             <span class="muted nowrap">@p.CurrentStock.Qty() @p.Unit.Abbreviation()</span>
@@ -108,7 +108,7 @@
             try
             {
                 var p = await Products.GetAsync(id);
-                OnProductChanged(new ProductPick(p.Id, p.Sku, p.Name, p.SalePrice, p.CurrentStock, p.Unit));
+                OnProductChanged(new ProductPick(p.Id, p.Sku, p.Name, p.SalePrice, p.CurrentStock, p.Unit, p.IsActive));
                 if (Type == StockMovementType.Entrada) _entry.Quantity = Math.Max(p.MinimumStock * 2 - p.CurrentStock, 1);
                 if (_canViewCost) _entry.UnitCost = p.CostPrice;
             }
@@ -117,7 +117,7 @@
     }
 
     private async Task<IEnumerable<ProductPick>> SearchAsync(string? term, CancellationToken ct)
-        => await Products.SearchForSaleAsync(term, 20, ct);
+        => await Products.SearchForStockAsync(term, 20, ct);
 
     private void OnProductChanged(ProductPick? product)
     {

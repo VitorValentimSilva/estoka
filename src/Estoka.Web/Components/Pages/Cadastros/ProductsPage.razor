@@ -39,11 +39,11 @@
     <MudDataGrid @ref="_grid" T="ProductListItem" ServerData="LoadAsync" Dense Hover RowsPerPage="25" Elevation="0"
                  SortMode="SortMode.Single" Class="data-grid" HorizontalScrollbar Breakpoint="Breakpoint.None">
         <Columns>
-            <PropertyColumn Property="x => x.Sku" Title="SKU" CellClass="mono nowrap" />
-            <PropertyColumn Property="x => x.Name" Title="Produto">
+            <PropertyColumn Property="x => x.Sku" Title="SKU" CellClass="mono nowrap hide-xs" HeaderClass="hide-xs" />
+            <PropertyColumn Property="x => x.Name" Title="Produto" CellStyle="min-width: 170px">
                 <CellTemplate>
                     <div class="cell-title">@context.Item.Name</div>
-                    <div class="cell-sub">@context.Item.CategoryName@(context.Item.SupplierName is null ? "" : $" · {context.Item.SupplierName}")</div>
+                    <div class="cell-sub"><span class="mono show-xs">@context.Item.Sku · </span>@context.Item.CategoryName<span class="hide-xs">@(context.Item.SupplierName is null ? "" : $" · {context.Item.SupplierName}")</span></div>
                 </CellTemplate>
             </PropertyColumn>
             <PropertyColumn Property="x => x.CategoryName" Title="Categoria" Hidden="true" />
