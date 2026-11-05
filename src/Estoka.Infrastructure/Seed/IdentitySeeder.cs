@@ -60,4 +60,19 @@ public sealed class IdentitySeeder(
             }
         }
     }
+
+    /// <summary>Remove usuários criados por visitantes na demonstração pública (mantém só as contas de demo).</summary>
+    public async Task<int> RemoveNonDemoUsersAsync()
+    {
+        var keep = DemoUsers.All.Select(u => u.Email.ToUpperInvariant()).ToArray();
+        var extra = userManager.Users.Where(u => u.NormalizedEmail == null || !keep.Contains(u.NormalizedEmail)).ToList();
+        foreach (var user in extra)
+        {
+            var result = await userManager.DeleteAsync(user);
+            if (!result.Succeeded)
+                logger.LogWarning("Não foi possível remover o usuário {Email}: {Errors}", user.Email,
+                    string.Join("; ", result.Errors.Select(e => e.Description)));
+        }
+        return extra.Count;
+    }
 }

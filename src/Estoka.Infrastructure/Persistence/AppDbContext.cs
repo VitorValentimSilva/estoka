@@ -27,6 +27,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SalesOrderItem> SalesOrderItems => Set<SalesOrderItem>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     /// <summary>Desliga a geração de AuditLog (usado na carga em massa da demonstração).</summary>
     public bool SuppressAudit { get; set; }
@@ -50,6 +51,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<IdentityUserToken<string>>().ToTable("user_tokens");
         builder.Entity<IdentityRoleClaim<string>>().ToTable("role_claims");
         builder.Entity<DataProtectionKey>().ToTable("data_protection_keys");
+        builder.Entity<SystemSetting>(b =>
+        {
+            b.ToTable("system_settings");
+            b.HasKey(x => x.Key);
+            b.Property(x => x.Key).HasMaxLength(100);
+            b.Property(x => x.Value).HasMaxLength(500);
+        });
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
