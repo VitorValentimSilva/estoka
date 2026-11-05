@@ -65,8 +65,15 @@ Legenda: ✅ feito · 🚧 em andamento · ⏳ pendente
 - ✅ GitHub Actions: build, testes com Postgres, cobertura, gate de pacotes vulneráveis, E2E contra a imagem Docker; Dependabot
 - ✅ 103 testes (48 unitários + 55 integração) passando
 
+## Rodada 2 — leitor de código de barras ✅
+- ✅ GTIN no produto (EAN-13/EAN-8/UPC-A/GTIN-14), dígito verificador GS1, único (índice parcial), busca por código na lista e no autocomplete
+- ✅ Campo "Bipar produto" no pedido (cada leitura soma 1 unidade) e na entrada/ajuste de estoque (seleciona o produto, inclusive inativo)
+- ✅ Leitura pela câmera: BarcodeDetector nativo + fallback ZXing 0.23 (Apache-2.0) servido localmente; mensagens de permissão/HTTPS
+- ✅ API `GET /api/v1/products/barcode/{code}` (200/404/422)
+- ✅ Seed com EAN-13 fictícios (prefixo GS1 "20") e preenchimento automático em bases já existentes
+- ✅ 122 testes (61 + 61) e E2E da câmera com vídeo falso gerado pelo teste, também no CI
+
 ## Falta / próximos passos (v2)
-- Leitor de código de barras (EAN-13, USB e câmera)
 - NF-e em homologação (Focus NFe) + provedor simulado na demo
 - Multiempresa (tenant) — cobrança/assinatura fora do escopo do portfólio
 - PWA instalável (sem offline: o Blazor Server exige conexão)
