@@ -35,6 +35,10 @@ public static class ApiEndpoints
                 return TypedResults.Ok(new ApiPage<ProductListItem>(result.Items, p, size, result.TotalCount));
             })
             .WithName("ListProducts").WithSummary("Lista produtos ativos (busca por nome/SKU, filtro por categoria e estoque baixo)");
+        products.MapGet("/barcode/{code}", async Task<Results<Ok<ProductPick>, NotFound>> (string code, ProductService service, CancellationToken ct)
+                => await service.FindByBarcodeAsync(code, includeInactive: false, ct) is { } product ? TypedResults.Ok(product) : TypedResults.NotFound())
+            .WithName("GetProductByBarcode").WithSummary("Busca produto ativo pelo código de barras (EAN-13, EAN-8, UPC-A, GTIN-14)")
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         products.MapGet("/{id:guid}", async (Guid id, ProductService service, CancellationToken ct) => TypedResults.Ok(await service.GetAsync(id, ct)))
             .WithName("GetProduct").WithSummary("Detalhes de um produto").ProducesProblem(StatusCodes.Status404NotFound);
 

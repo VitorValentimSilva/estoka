@@ -92,6 +92,7 @@ else
                 </div>
                 @if (_editable)
                 {
+                    <div class="scan-row">
                     <MudAutocomplete T="ProductPick" @ref="_productPicker" Value="_pickedProduct" ValueChanged="AddProductAsync" SearchFunc="SearchProductsAsync"
                                      Placeholder="Adicionar produto: digite nome ou SKU" Variant="Variant.Outlined" Margin="Margin.Dense"
                                      ToStringFunc="@(p => p?.ToString() ?? string.Empty)" DebounceInterval="250" ShowProgressIndicator Clearable
@@ -107,6 +108,8 @@ else
                         </ItemTemplate>
                         <NoItemsTemplate><MudText Class="pa-2 muted">Nenhum produto encontrado.</MudText></NoItemsTemplate>
                     </MudAutocomplete>
+                    <BarcodeField OnScanned="AddByBarcodeAsync" Label="Bipar produto" Class="mb-3" />
+                    </div>
                 }
 
                 @if (_lines.Count == 0)
@@ -368,6 +371,26 @@ else
         });
         _pickedProduct = null;
         if (_productPicker is not null) await _productPicker.ClearAsync();
+    }
+
+    /// <summary>Leitor USB/câmera: cada leitura adiciona 1 unidade (ou soma à linha existente).</summary>
+    private async Task AddByBarcodeAsync(string code)
+    {
+        try
+        {
+            var product = await Products.FindByBarcodeAsync(code);
+            if (product is null)
+            {
+                Snackbar.Add($"Nenhum produto ativo com o código {code}.", Severity.Warning);
+                return;
+            }
+            await AddProductAsync(product);
+            Snackbar.Add($"{product.Name} adicionado.", Severity.Success, o => o.VisibleStateDuration = 1500);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+        }
     }
 
     private SalesOrderInput BuildInput() => new()

@@ -8,6 +8,7 @@
 @inject ICurrentUser User
 @inject ISnackbar Snackbar
 @inject ILogger<ProductDialog> Logger
+@inject IDialogService Dialogs
 
 <MudDialog>
     <DialogContent>
@@ -25,6 +26,12 @@
                     </MudItem>
                     <MudItem xs="12" sm="8">
                         <MudTextField @bind-Value="_input.Name" For="() => _input.Name" Label="Nome" Variant="Variant.Outlined" Required Immediate />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_input.Barcode" For="() => _input.Barcode" Label="Código de barras (EAN/GTIN)" Variant="Variant.Outlined"
+                                      Immediate InputMode="InputMode.numeric" MaxLength="18" HelperText="Opcional — bipe, digite ou use a câmera"
+                                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.PhotoCamera" OnAdornmentClick="ScanBarcodeAsync"
+                                      AdornmentAriaLabel="Ler com a câmera" />
                     </MudItem>
                     <MudItem xs="12" sm="6">
                         <MudSelect T="Guid" @bind-Value="_input.CategoryId" For="() => _input.CategoryId" Label="Categoria" Variant="Variant.Outlined" Required>
@@ -150,6 +157,17 @@
         {
             Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
             Dialog.Cancel();
+        }
+    }
+
+    private async Task ScanBarcodeAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<BarcodeScannerDialog>("Ler código de barras",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        if (await dialog.Result is { Canceled: false, Data: string code } && _input is not null)
+        {
+            _input.Barcode = code;
+            await _form.ValidateAsync();
         }
     }
 
