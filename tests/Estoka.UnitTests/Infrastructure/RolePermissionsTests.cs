@@ -12,6 +12,8 @@ public class RolePermissionsTests
         RolePermissions.Has(roles, Permission.ManageCatalog).ShouldBeFalse();
         RolePermissions.Has(roles, Permission.ManageOrders).ShouldBeTrue();
         RolePermissions.Has(roles, Permission.ViewStock).ShouldBeTrue();
+        RolePermissions.Has(roles, Permission.GrantUnlimitedDiscount).ShouldBeFalse();
+        RolePermissions.Has([Roles.Api], Permission.GrantUnlimitedDiscount).ShouldBeFalse();
     }
 
     [Fact]
