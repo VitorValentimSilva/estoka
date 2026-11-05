@@ -35,7 +35,7 @@ jobs:
     env:
       ESTOKA_TEST_PG: Host=localhost;Username=estoka;Password=estoka;Database=postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
@@ -73,7 +73,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U estoka" --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build da imagem
         run: docker build -t estoka:ci .
       - name: Sobe o container (usuário não-root, PORT, URI de conexão)
