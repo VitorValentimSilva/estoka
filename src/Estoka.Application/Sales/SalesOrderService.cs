@@ -122,10 +122,17 @@ public sealed class SalesOrderService(
     /// Se outro usuário alterar um dos produtos ao mesmo tempo (xmin diferente), a operação é refeita
     /// do zero com dados atualizados; se o estoque não for mais suficiente, a confirmação falha com mensagem amigável.
     /// </summary>
-    public Task ConfirmAsync(Guid id, CancellationToken ct = default)
-        => ExecuteWithConcurrencyRetryAsync(id, (db, order, products, now) =>
+    public async Task ConfirmAsync(Guid id, CancellationToken ct = default)
+    {
+        using var activity = EstokaTelemetry.Source.StartActivity("Confirmar pedido");
+        activity?.SetTag("estoka.order.id", id);
+        decimal total = 0;
+        int movements = 0;
+        await ExecuteWithConcurrencyRetryAsync(id, (db, order, products, now) =>
         {
             order.Confirm(now);
+            total = order.Total;
+            movements = order.Items.Count;
             foreach (var item in order.Items)
             {
                 var product = products[item.ProductId];
@@ -135,6 +142,10 @@ public sealed class SalesOrderService(
                     $"Venda {order.Code}", user.UserName, now, salesOrderId: order.Id));
             }
         }, ct);
+        EstokaTelemetry.OrdersConfirmed.Add(1);
+        EstokaTelemetry.Revenue.Add((double)total);
+        EstokaTelemetry.StockMovements.Add(movements);
+    }
 
     public Task InvoiceAsync(Guid id, CancellationToken ct = default)
         => ExecuteWithConcurrencyRetryAsync(id, (_, order, _, now) => order.Invoice(now), ct);
@@ -143,14 +154,19 @@ public sealed class SalesOrderService(
         => ExecuteWithConcurrencyRetryAsync(id, (_, order, _, now) => order.Deliver(now), ct);
 
     /// <summary>Cancela o pedido; se o estoque já havia sido baixado, devolve via movimentações de DEVOLUÇÃO.</summary>
-    public Task CancelAsync(Guid id, string reason, CancellationToken ct = default)
-        => ExecuteWithConcurrencyRetryAsync(id, (db, order, products, now) =>
+    public async Task CancelAsync(Guid id, string reason, CancellationToken ct = default)
+    {
+        using var activity = EstokaTelemetry.Source.StartActivity("Cancelar pedido");
+        activity?.SetTag("estoka.order.id", id);
+        await ExecuteWithConcurrencyRetryAsync(id, (db, order, products, now) =>
         {
             if (!order.Cancel(now, string.IsNullOrWhiteSpace(reason) ? "Cancelado pelo usuário" : reason)) return;
             foreach (var item in order.Items)
                 db.StockMovements.Add(products[item.ProductId].RegisterMovement(StockMovementType.Devolucao, item.Quantity,
                     $"Cancelamento {order.Code}", user.UserName, now, salesOrderId: order.Id));
         }, ct);
+        EstokaTelemetry.OrdersCanceled.Add(1);
+    }
 
     private async Task ExecuteWithConcurrencyRetryAsync(
         Guid id, Action<IAppDbContext, SalesOrder, IReadOnlyDictionary<Guid, Product>, DateTimeOffset> action, CancellationToken ct)
@@ -176,6 +192,8 @@ public sealed class SalesOrderService(
             }
             catch (ConcurrencyConflictException) when (attempt < MaxConcurrencyAttempts)
             {
+                EstokaTelemetry.ConcurrencyRetries.Add(1);
+                System.Diagnostics.Activity.Current?.AddEvent(new System.Diagnostics.ActivityEvent("Conflito de concorrência; nova tentativa"));
                 await tx.RollbackAsync(ct);
                 await Task.Delay(Random.Shared.Next(20, 80) * attempt, ct);
             }
@@ -195,6 +213,19 @@ public sealed class SalesOrderService(
             order.AddItem(product, item.Quantity, price, item.Discount);
         }
         order.SetDiscount(input.Discount);
+        EnsureDiscountWithinLimit(order);
+    }
+
+    /// <summary>Vendedor (e API) pode conceder até <see cref="SalesPolicy.MaxSellerDiscountPercent"/>% do valor bruto.</summary>
+    private void EnsureDiscountWithinLimit(SalesOrder order)
+    {
+        if (user.Can(Permission.GrantUnlimitedDiscount)) return;
+        var gross = order.Items.Sum(i => Math.Round(i.Quantity * i.UnitPrice, 2));
+        var discount = order.Items.Sum(i => i.Discount) + order.Discount;
+        var limit = Math.Round(gross * SalesPolicy.MaxSellerDiscountPercent / 100, 2);
+        if (discount > limit)
+            throw new DomainException(
+                $"Desconto total de {discount:C2} acima do permitido para o seu perfil ({SalesPolicy.MaxSellerDiscountPercent:0}% = {limit:C2}). Peça aprovação a um gerente.");
     }
 
     private static async Task EnsureCustomerAsync(IAppDbContext db, Guid customerId, CancellationToken ct)

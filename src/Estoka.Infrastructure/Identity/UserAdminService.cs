@@ -6,10 +6,12 @@ using Estoka.Domain.Auditing;
 using Estoka.Domain.Common;
 using Estoka.Infrastructure.Persistence;
 using Estoka.Infrastructure.Persistence.Interceptors;
+using Estoka.Infrastructure.Seed;
 using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Estoka.Infrastructure.Identity;
 
@@ -18,9 +20,20 @@ namespace Estoka.Infrastructure.Identity;
 /// adequado ao Blazor Server; alterações de papel/ativação trocam o security stamp para derrubar sessões abertas.
 /// </summary>
 internal sealed class UserAdminService(
-    IServiceScopeFactory scopeFactory, ICurrentUser currentUser, IValidator<CreateUserInput> validator, TimeProvider clock)
+    IServiceScopeFactory scopeFactory, ICurrentUser currentUser, IValidator<CreateUserInput> validator, TimeProvider clock,
+    IOptions<DemoOptions> demo)
     : IUserAdminService
 {
+    private bool IsProtected(string? email)
+        => demo.Value.Enabled && email is not null
+           && DemoUsers.All.Any(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+
+    private void EnsureNotProtected(AppUser user)
+    {
+        if (IsProtected(user.Email))
+            throw new DomainException("As contas de demonstração não podem ser alteradas — crie um usuário para testar estas ações.");
+    }
+
     public async Task<IReadOnlyList<UserDto>> ListAsync(CancellationToken ct = default)
     {
         currentUser.Demand(Permission.ManageUsers);
@@ -29,7 +42,8 @@ internal sealed class UserAdminService(
         var roles = await (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id select new { ur.UserId, r.Name })
             .ToDictionaryAsync(x => x.UserId, x => x.Name!, ct);
         var users = await db.Users.AsNoTracking().OrderBy(u => u.FullName).ToListAsync(ct);
-        return users.Select(u => new UserDto(u.Id, u.FullName, u.Email ?? string.Empty, roles.GetValueOrDefault(u.Id, "—"), u.IsActive, u.CreatedAt))
+        return users.Select(u => new UserDto(u.Id, u.FullName, u.Email ?? string.Empty, roles.GetValueOrDefault(u.Id, "—"), u.IsActive, u.CreatedAt,
+                IsProtected(u.Email)))
             .ToList();
     }
 
@@ -58,6 +72,7 @@ internal sealed class UserAdminService(
         await using var scope = scopeFactory.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var user = await users.FindByIdAsync(userId) ?? throw NotFoundException.For("Usuário");
+        EnsureNotProtected(user);
         var current = await users.GetRolesAsync(user);
         if (current.Count == 1 && current[0] == role) return;
         Check(await users.RemoveFromRolesAsync(user, current));
@@ -73,6 +88,7 @@ internal sealed class UserAdminService(
         await using var scope = scopeFactory.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var user = await users.FindByIdAsync(userId) ?? throw NotFoundException.For("Usuário");
+        EnsureNotProtected(user);
         if (user.IsActive == active) return;
         user.IsActive = active;
         Check(await users.UpdateAsync(user));

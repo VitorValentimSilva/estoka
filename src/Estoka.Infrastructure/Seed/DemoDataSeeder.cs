@@ -246,12 +246,37 @@ public sealed class DemoDataSeeder(IDbContextFactory<AppDbContext> factory, Time
              WHERE m.sales_order_id = o.id AND m.reason LIKE {1};
             """, [CodePlaceholder, "%" + CodePlaceholder], ct);
 
+        await MarkResetAsync(db, ct);
         db.SuppressAudit = false;
         logger.LogInformation("Dados de demonstração gerados: {Products} produtos, {Customers} clientes, {Orders} pedidos em {Elapsed:0.0}s",
             products.Count, customers.Count, orderCount, clock.GetElapsedTime(started).TotalSeconds);
     }
 
     private const string CodePlaceholder = "#PEDIDO#";
+
+    /// <summary>Data/hora (UTC) da última geração dos dados de demonstração, ou null se nunca registrada.</summary>
+    public async Task<DateTimeOffset?> GetLastResetAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var value = await db.SystemSettings.Where(s => s.Key == SystemSetting.LastDemoResetKey).Select(s => s.Value).FirstOrDefaultAsync(ct);
+        return DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var at)
+            ? at
+            : null;
+    }
+
+    private async Task MarkResetAsync(AppDbContext db, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var setting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == SystemSetting.LastDemoResetKey, ct);
+        if (setting is null)
+            db.SystemSettings.Add(new SystemSetting { Key = SystemSetting.LastDemoResetKey, Value = now.ToString("O"), UpdatedAt = now });
+        else
+        {
+            setting.Value = now.ToString("O");
+            setting.UpdatedAt = now;
+        }
+        await db.SaveChangesAsync(ct);
+    }
 
     private static void AddSampleAuditTrail(AppDbContext db, List<Product> products, List<Customer> customers, Random rnd,
         Func<DateOnly, double, DateTimeOffset> at, DateOnly today)

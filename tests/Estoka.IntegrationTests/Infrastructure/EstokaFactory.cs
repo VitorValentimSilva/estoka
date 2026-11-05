@@ -13,7 +13,7 @@ namespace Estoka.IntegrationTests.Infrastructure;
 /// Sobe a aplicação real contra um banco PostgreSQL exclusivo (criado e removido a cada execução).
 /// Configure <c>ESTOKA_TEST_PG</c> para apontar para outro servidor (padrão: Postgres local).
 /// </summary>
-public sealed class EstokaFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class EstokaFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private static readonly string ServerConnection =
         Environment.GetEnvironmentVariable("ESTOKA_TEST_PG") ?? "Host=localhost;Username=estoka;Password=estoka;Database=postgres";
@@ -31,6 +31,9 @@ public sealed class EstokaFactory : WebApplicationFactory<Program>, IAsyncLifeti
         builder.UseSetting("Database:RequireSsl", "false");
         builder.UseSetting("Demo:Enabled", "true");
         builder.UseSetting("Api:Key", ApiKey);
+        // Os testes fazem dezenas de logins em segundos: limites altos aqui; o 429 é testado numa factory própria.
+        builder.UseSetting("RateLimiting:LoginPerMinute", "100000");
+        builder.UseSetting("RateLimiting:ApiPerMinute", "100000");
     }
 
     public async ValueTask InitializeAsync()

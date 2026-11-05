@@ -53,5 +53,20 @@ Legenda: ✅ feito · 🚧 em andamento · ⏳ pendente
 - ✅ `dotnet build` sem warnings · `dotnet test` 88 testes (45 unitários + 43 integração) passando
 - ✅ E2E Playwright do Vendedor (local e no container)
 
+## Rodada 1 pós-v1 — correções, segurança, CI e observabilidade ✅
+- ✅ Reset da demo executa ao iniciar se o horário passou com o serviço "dormindo" (registro em `system_settings`)
+- ✅ Reset remove usuários criados por visitantes; contas de demo protegidas contra desativação/troca de papel
+- ✅ Limite de desconto de 10% para Vendedor e API (`GrantUnlimitedDiscount` para Gerente/Admin), com aviso na tela do pedido
+- ✅ Entrada/ajuste de estoque encontra produtos inativos
+- ✅ Tabela de produtos legível no celular (SKU abaixo do nome)
+- ✅ Rate limiting (login 10/min e API 120/min por IP), CSP, HSTS, nosniff, Referrer/Permissions-Policy, COOP
+- ✅ `/health` sem detalhes de erro fora de desenvolvimento; chave no Scalar só com `Api:ShowKeyInDocs`
+- ✅ OpenTelemetry (traces HTTP/Npgsql/casos de uso, métricas de negócio, logs) via OTLP opcional — validado com receptor local
+- ✅ GitHub Actions: build, testes com Postgres, cobertura, gate de pacotes vulneráveis, E2E contra a imagem Docker; Dependabot
+- ✅ 103 testes (48 unitários + 55 integração) passando
+
 ## Falta / próximos passos (v2)
-- NF-e (emissão via provedor), multiempresa, leitor de código de barras, app mobile/PWA, CI no GitHub Actions
+- Leitor de código de barras (EAN-13, USB e câmera)
+- NF-e em homologação (Focus NFe) + provedor simulado na demo
+- Multiempresa (tenant) — cobrança/assinatura fora do escopo do portfólio
+- PWA instalável (sem offline: o Blazor Server exige conexão)

@@ -31,7 +31,7 @@ public sealed record ProductQuery : PageRequest
 }
 
 /// <summary>Resultado enxuto para autocomplete na tela de pedido.</summary>
-public sealed record ProductPick(Guid Id, string Sku, string Name, decimal SalePrice, decimal CurrentStock, UnitOfMeasure Unit)
+public sealed record ProductPick(Guid Id, string Sku, string Name, decimal SalePrice, decimal CurrentStock, UnitOfMeasure Unit, bool IsActive = true)
 {
     public override string ToString() => $"{Sku} — {Name}";
 }

@@ -1,6 +1,6 @@
 # Estoka — gestão de estoque e vendas para pequenas empresas
 
-![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-5C2D91) ![EF Core](https://img.shields.io/badge/EF%20Core-10-0F766E) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791) ![Tests](https://img.shields.io/badge/testes-88%20%2B%20E2E-16A34A)
+[![CI](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml/badge.svg)](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-5C2D91) ![EF Core](https://img.shields.io/badge/EF%20Core-10-0F766E) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791) ![Tests](https://img.shields.io/badge/testes-103%20%2B%20E2E-16A34A)
 
 **Demo:** (link) · usuários `admin@estoka.app`, `gerente@estoka.app`, `vendedor@estoka.app` — senha `Demo@1234`
 **API:** (link)/scalar · chave de demonstração `estoka-demo-key`
@@ -14,7 +14,7 @@
 - **Stack:** .NET 10, Blazor Web App (Interactive Server) + MudBlazor, EF Core 10 + PostgreSQL, ASP.NET Core Identity, Minimal APIs with native OpenAPI + Scalar, QuestPDF, ClosedXML, Docker.
 - **Architecture:** lean Clean Architecture (Domain / Application / Infrastructure / Web), business rules in the domain, authorization enforced in the services (not only in the UI).
 - **Highlights:** stock can never go negative; confirming an order writes stock movements in one transaction; **optimistic concurrency** with PostgreSQL `xmin` (two users racing for the last unit → only one wins, with a friendly message); automatic **audit trail** (before/after JSON) via an EF Core interceptor; soft delete with global query filters; role-based access (Admin / Manager / Salesperson — salespeople never see cost or margin); daily-reset demo data.
-- **Quality:** 88 unit + integration tests against a real PostgreSQL (WebApplicationFactory), plus a Playwright end-to-end flow. Ships with a non-root multi-stage Dockerfile, docker-compose and a Render blueprint.
+- **Quality & ops:** 103 unit + integration tests against a real PostgreSQL (WebApplicationFactory) plus a Playwright end-to-end flow, all running in GitHub Actions (with coverage and a vulnerable-package gate). OpenTelemetry traces/metrics (OTLP), rate limiting, CSP/HSTS security headers, a non-root multi-stage Dockerfile, docker-compose and a Render blueprint.
 
 I build this kind of system for clients — internal tools, dashboards, APIs and integrations in .NET.
 
@@ -62,6 +62,7 @@ A demonstração vem configurada para a empresa fictícia **Distribuidora Bom Pr
 | Produtos, categorias e fornecedores — cadastrar/editar/excluir | ✅ | ✅ | ❌ |
 | Clientes — CRUD (CPF/CNPJ validados, máscaras) | ✅ | ✅ | ✅ |
 | Pedidos — criar, confirmar, faturar, entregar, cancelar, PDF | ✅ | ✅ | ✅ (sem alterar preço de tabela) |
+| Desconto acima de 10% do valor bruto | ✅ | ✅ | ❌ |
 | Estoque — consultar movimentações | ✅ | ✅ | ✅ |
 | Estoque — registrar entrada e ajuste de inventário | ✅ | ✅ | ❌ |
 | Relatórios (vendas, curva ABC, posição de estoque) + Excel/PDF | ✅ | ✅ | ❌ |
@@ -134,6 +135,10 @@ tests/
 
 **Datas e dinheiro.** Datas em UTC (`timestamptz`) e exibidas em horário de Brasília; dinheiro em `numeric(18,2)`, quantidades em `numeric(18,3)`, formatados em pt-BR.
 
+**Segurança.** Além da autorização nos serviços: limite de requisições por IP no login (10/min) e na API (120/min) com resposta 429; lockout do Identity por conta; cabeçalhos `Content-Security-Policy`, `HSTS`, `X-Content-Type-Options`, `Referrer-Policy` e `Permissions-Policy`; cookie `HttpOnly`/`SameSite`; antiforgery no login e no logout; proteção contra *open redirect* no retorno do login; API key comparada em tempo constante; `/health` sem detalhes de erro fora de desenvolvimento; dependências verificadas no CI (`dotnet list package --vulnerable`) e atualizadas pelo Dependabot. Na demo pública, as três contas de demonstração não podem ser desativadas nem ter o papel trocado, e usuários criados por visitantes somem no reset diário.
+
+**Observabilidade (OpenTelemetry).** Traces de HTTP, das consultas ao PostgreSQL (Npgsql) e dos casos de uso críticos ("Confirmar pedido", "Cancelar pedido"); métricas de ASP.NET Core, runtime e de negócio (`estoka.orders.confirmed`, `estoka.orders.revenue`, `estoka.orders.canceled`, `estoka.stock.movements`, `estoka.concurrency.retries`); logs estruturados. A exportação OTLP liga ao definir `OTEL_EXPORTER_OTLP_ENDPOINT` (Grafana Cloud, Honeycomb, Jaeger ou o Aspire Dashboard local).
+
 **Migrations no startup.** O app aplica migrations ao iniciar (`Database.MigrateAsync`) — prático para a demo e um único container. Num ambiente maior, isso vira um passo do pipeline de deploy (ex.: `dotnet ef migrations bundle`), com aprovação e rollback controlados.
 
 ## Como rodar
@@ -177,6 +182,10 @@ dotnet ef migrations add NomeDaMigration -p src/Estoka.Infrastructure -s src/Est
 | `Demo__ResetHour` | `4` | Hora (Brasília) do reset diário da demo |
 | `Demo__Password` | `Demo@1234` | Senha dos usuários de demonstração |
 | `Api__Key` | `estoka-demo-key` | Chave aceita no cabeçalho `X-Api-Key` |
+| `Api__ShowKeyInDocs` | `true` (demo) | Pré-preenche a chave no Scalar — use `false` quando a chave for secreta |
+| `RateLimiting__LoginPerMinute` / `__ApiPerMinute` | `10` / `120` | Limite por IP no login e na API |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | — | Liga a exportação OpenTelemetry (traces, métricas e logs) |
+| `OTEL_SERVICE_NAME` | `estoka` | Nome do serviço na telemetria |
 | `Branding__CompanyName` / `__CompanyCity` | Distribuidora Bom Preço / Campinas – SP | Empresa exibida no painel e nos PDFs |
 | `Branding__AuthorName` / `__AuthorUrl` / `__RepositoryUrl` | — | Rodapé "Projeto fictício desenvolvido para portfólio por..." |
 
@@ -206,12 +215,14 @@ curl -X POST http://localhost:8080/api/v1/orders -H "X-Api-Key: estoka-demo-key"
 dotnet test
 ```
 
-- **Unitários (45):** regras de estoque (nunca negativo, saldo = soma), fluxo de status e totais do pedido, CPF/CNPJ, conversão de connection string URI, agenda do reset, matriz de permissões.
-- **Integração (43, PostgreSQL real):** cada execução cria um banco temporário, aplica migrations e o seed, e o remove no fim. Cobrem: consistência estoque × movimentações, **dois pedidos simultâneos pelo último item**, `xmin`, auditoria e soft delete, **Vendedor tentando ver custo** (serviço e HTTP), login real pelo formulário, usuário desativado, dashboard, PDF, exportações, API (401/400/404/422/201) e gestão de usuários. Use `ESTOKA_TEST_PG` para apontar outro servidor.
+- **Unitários (48):** regras de estoque (nunca negativo, saldo = soma), fluxo de status e totais do pedido, CPF/CNPJ, conversão de connection string URI, agenda do reset, matriz de permissões.
+- **Integração (55, PostgreSQL real):** cada execução cria um banco temporário, aplica migrations e o seed, e o remove no fim. Cobrem: consistência estoque × movimentações, **dois pedidos simultâneos pelo último item**, `xmin`, auditoria e soft delete, **Vendedor tentando ver custo** (serviço e HTTP), login real pelo formulário, usuário desativado, dashboard, PDF, exportações, API (401/400/404/422/201), gestão de usuários, limite de desconto, contas de demo protegidas, rate limiting (429), cabeçalhos de segurança e métricas de negócio. Use `ESTOKA_TEST_PG` para apontar outro servidor.
+- **Cobertura** (sem migrations): Domain 88% · Infrastructure 85% · Application 66% · Web 24% (as telas Blazor rodam via SignalR e são cobertas pelo E2E). O CI publica o relatório Cobertura como artefato.
+- **CI (GitHub Actions):** build com warnings como erro, testes com PostgreSQL em container, verificação de pacotes vulneráveis e E2E contra a imagem Docker.
 - **E2E (Playwright):** Vendedor faz login → cria pedido → confirma → confere a baixa de estoque.
 
 ```bash
-npm i -D playwright
+cd tests/e2e && npm ci && npx playwright install chromium
 ```
 
 ```bash
@@ -223,16 +234,17 @@ BASE_URL=http://localhost:8080 node tests/e2e/pedido-vendedor.cjs
 1. **Banco (Neon):** crie um projeto em [neon.tech](https://neon.tech) (região `sa-east-1` se disponível) e copie a *connection string* (`postgresql://...@...neon.tech/neondb?sslmode=require`). O formato URI é aceito diretamente.
 2. **Render:** faça fork/push deste repositório no GitHub. No [Render](https://render.com), escolha **New → Blueprint** e selecione o repositório — o `render.yaml` cria o serviço Docker com health check em `/health`.
    - Alternativa manual: **New → Web Service → Docker**, health check path `/health`.
-3. **Variáveis:** em *Environment*, preencha `ConnectionStrings__Default` com a string do Neon. `Api__Key` é gerada automaticamente (ou defina a sua). Mantenha `Demo__Enabled=true` para a demonstração.
+3. **Variáveis:** em *Environment*, preencha `ConnectionStrings__Default` com a string do Neon. O blueprint usa a chave pública de demo `estoka-demo-key` (papel limitado, sem custos); num uso real troque por `generateValue: true` e `Api__ShowKeyInDocs=false`. Mantenha `Demo__Enabled=true` para a demonstração.
 4. **Deploy:** o primeiro boot aplica as migrations e gera os dados de demonstração (alguns segundos). Acesse a URL do Render e faça login com os usuários de demo.
-5. **Observações:** o Render termina o HTTPS no proxy — o app usa `UseForwardedHeaders` e não força redirecionamento interno. WebSockets (SignalR do Blazor) funcionam nativamente. As chaves do Data Protection ficam no banco, então o login sobrevive a reinícios e novos deploys. No plano gratuito o serviço "dorme" após inatividade; o primeiro acesso demora alguns segundos.
+5. **Observações:** o Render termina o HTTPS no proxy — o app usa `UseForwardedHeaders` e não força redirecionamento interno. WebSockets (SignalR do Blazor) funcionam nativamente. As chaves do Data Protection ficam no banco, então o login sobrevive a reinícios e novos deploys. No plano gratuito o serviço "dorme" após inatividade; o primeiro acesso demora alguns segundos — e, se o horário do reset diário passou enquanto ele dormia, os dados de demonstração são recriados nesse momento.
 
 ## Limitações conhecidas
 
 - Sem NF-e/integração fiscal; o PDF do pedido é um documento sem valor fiscal.
 - Sem reserva de estoque para rascunhos (o estoque só é baixado na confirmação, como em muitos ERPs pequenos).
 - Agregações do dashboard/relatórios são feitas parcialmente em memória — adequado para o volume de uma pequena empresa; para volumes grandes, usar views/materialized views.
-- Usuários de demonstração e dados são públicos e reiniciados diariamente.
+- Usuários de demonstração e dados são públicos e reiniciados diariamente (contas de demo protegidas; usuários criados por visitantes removidos no reset).
+- O limite de desconto do Vendedor (10%) é fixo no código (`SalesPolicy`); uma v2 poderia torná-lo configurável por empresa.
 - Interface só em pt-BR.
 
 ---

@@ -212,6 +212,15 @@ else
                     </div>
                     <MudDivider Class="my-3" />
                     <div class="summary-row summary-row--total"><span>Total</span><span class="num">@Total.Money()</span></div>
+                    @if (_editable && !_canGrantUnlimitedDiscount)
+                    {
+                        var gross = _lines.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2));
+                        var given = _lines.Sum(l => l.Discount) + _discount;
+                        var limit = Math.Round(gross * SalesPolicy.MaxSellerDiscountPercent / 100, 2);
+                        <MudText Typo="Typo.caption" Class="@(given > limit ? "qty-warn d-block mt-1" : "muted d-block mt-1")">
+                            Desconto concedido @given.Money() de até @limit.Money() (@SalesPolicy.MaxSellerDiscountPercent.ToString("0")% do bruto)
+                        </MudText>
+                    }
                     @if (Total < 0)
                     {
                         <MudAlert Severity="Severity.Error" Dense Class="mt-2">O desconto é maior que o subtotal.</MudAlert>
@@ -283,6 +292,7 @@ else
     private bool _editable;
     private bool _canManage;
     private bool _canChangePrice;
+    private bool _canGrantUnlimitedDiscount;
 
     private decimal Subtotal => _lines.Sum(l => l.Total);
     private decimal Total => Subtotal - _discount;
@@ -297,6 +307,7 @@ else
     {
         _canManage = User.Can(Permission.ManageOrders);
         _canChangePrice = User.Can(Permission.ViewCost);
+        _canGrantUnlimitedDiscount = User.Can(Permission.GrantUnlimitedDiscount);
         await LoadAsync();
     }
 
