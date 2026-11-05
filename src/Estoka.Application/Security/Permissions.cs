@@ -22,6 +22,8 @@ public enum Permission
     ManageCustomers,
     ViewOrders,
     ManageOrders,
+    /// <summary>Conceder desconto acima do limite padrão do vendedor (<see cref="Sales.SalesPolicy.MaxSellerDiscountPercent"/>).</summary>
+    GrantUnlimitedDiscount,
     ViewDashboard,
     ViewReports,
     ViewAudit,

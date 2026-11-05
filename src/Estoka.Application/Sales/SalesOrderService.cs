@@ -195,6 +195,19 @@ public sealed class SalesOrderService(
             order.AddItem(product, item.Quantity, price, item.Discount);
         }
         order.SetDiscount(input.Discount);
+        EnsureDiscountWithinLimit(order);
+    }
+
+    /// <summary>Vendedor (e API) pode conceder até <see cref="SalesPolicy.MaxSellerDiscountPercent"/>% do valor bruto.</summary>
+    private void EnsureDiscountWithinLimit(SalesOrder order)
+    {
+        if (user.Can(Permission.GrantUnlimitedDiscount)) return;
+        var gross = order.Items.Sum(i => Math.Round(i.Quantity * i.UnitPrice, 2));
+        var discount = order.Items.Sum(i => i.Discount) + order.Discount;
+        var limit = Math.Round(gross * SalesPolicy.MaxSellerDiscountPercent / 100, 2);
+        if (discount > limit)
+            throw new DomainException(
+                $"Desconto total de {discount:C2} acima do permitido para o seu perfil ({SalesPolicy.MaxSellerDiscountPercent:0}% = {limit:C2}). Peça aprovação a um gerente.");
     }
 
     private static async Task EnsureCustomerAsync(IAppDbContext db, Guid customerId, CancellationToken ct)
