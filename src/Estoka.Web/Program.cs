@@ -65,6 +65,8 @@ builder.Services.AddDataProtection()
     .SetApplicationName("Estoka")
     .PersistKeysToDbContext<AppDbContext>();
 
+builder.Services.AddEstokaRateLimiting(builder.Configuration);
+builder.Services.AddHsts(o => o.MaxAge = TimeSpan.FromDays(180));
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
@@ -100,6 +102,9 @@ var app = builder.Build();
 await DatabaseInitializer.InitializeAsync(app.Services);
 
 app.UseForwardedHeaders();
+app.UseEstokaSecurityHeaders();
+if (!app.Environment.IsDevelopment())
+    app.UseHsts(); // só envia o cabeçalho em HTTPS (o proxy do Render informa via X-Forwarded-Proto)
 // API e downloads respondem ProblemDetails (IExceptionHandler); páginas vão para /erro.
 // Sem UseHttpsRedirection/HSTS: o HTTPS termina no proxy (Render).
 app.UseExceptionHandler(new ExceptionHandlerOptions
@@ -112,6 +117,7 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
 app.UseRequestLocalization("pt-BR");
 app.UseStatusCodePagesWithReExecute("/nao-encontrado", createScopeForStatusCodePages: true);
 app.UseWebSockets();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -126,7 +132,7 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
-    ResponseWriter = HealthResponseWriter.WriteAsync,
+    ResponseWriter = (context, report) => HealthResponseWriter.WriteAsync(context, report, includeErrors: app.Environment.IsDevelopment()),
 }).AllowAnonymous();
 app.MapAccountEndpoints();
 app.MapDocumentEndpoints();
@@ -135,7 +141,8 @@ app.MapOpenApi().AllowAnonymous();
 app.MapScalarApiReference("/scalar", o => o
         .WithTitle("Estoka API")
         .AddPreferredSecuritySchemes(ApiKeyAuthOptions.Scheme)
-        .AddApiKeyAuthentication(ApiKeyAuthOptions.Scheme, scheme => scheme.Value = app.Configuration.GetValue("Demo:Enabled", false)
+        // Só pré-preenche a chave quando ela é pública de propósito (demo); em produção real, Api:ShowKeyInDocs=false.
+        .AddApiKeyAuthentication(ApiKeyAuthOptions.Scheme, scheme => scheme.Value = app.Configuration.GetValue("Api:ShowKeyInDocs", false)
             ? app.Configuration["Api:Key"] ?? string.Empty
             : string.Empty))
     .AllowAnonymous();

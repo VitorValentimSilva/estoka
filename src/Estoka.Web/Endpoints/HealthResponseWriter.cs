@@ -5,7 +5,8 @@ namespace Estoka.Web.Endpoints;
 
 internal static class HealthResponseWriter
 {
-    public static Task WriteAsync(HttpContext context, HealthReport report)
+    /// <summary>Detalhes de erro só em desenvolvimento: o endpoint é anônimo.</summary>
+    public static Task WriteAsync(HttpContext context, HealthReport report, bool includeErrors)
     {
         context.Response.ContentType = "application/json; charset=utf-8";
         var payload = new
@@ -16,7 +17,7 @@ internal static class HealthResponseWriter
             {
                 status = e.Value.Status.ToString(),
                 durationMs = Math.Round(e.Value.Duration.TotalMilliseconds, 1),
-                error = e.Value.Exception?.Message,
+                error = includeErrors ? e.Value.Exception?.Message : null,
             }),
         };
         return context.Response.WriteAsync(JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
