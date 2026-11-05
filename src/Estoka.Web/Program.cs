@@ -28,6 +28,7 @@ var ptBr = new CultureInfo("pt-BR");
 CultureInfo.DefaultThreadCurrentCulture = ptBr;
 CultureInfo.DefaultThreadCurrentUICulture = ptBr;
 
+builder.AddEstokaTelemetry();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.Configure<BrandingOptions>(builder.Configuration.GetSection(BrandingOptions.Section));

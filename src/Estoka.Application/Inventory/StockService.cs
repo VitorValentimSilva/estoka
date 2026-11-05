@@ -76,6 +76,7 @@ public sealed class StockService(
             clock.GetUtcNow(), input.UnitCost);
         db.StockMovements.Add(movement);
         await db.SaveChangesAsync(ct);
+        EstokaTelemetry.StockMovements.Add(1);
         return movement.Id;
     }
 
@@ -90,6 +91,7 @@ public sealed class StockService(
         var movement = product.RegisterMovement(StockMovementType.Ajuste, delta, input.Reason, user.UserName, clock.GetUtcNow());
         db.StockMovements.Add(movement);
         await db.SaveChangesAsync(ct);
+        EstokaTelemetry.StockMovements.Add(1);
         return movement.Id;
     }
 }
