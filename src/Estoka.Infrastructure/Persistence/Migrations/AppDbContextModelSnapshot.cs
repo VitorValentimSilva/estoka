@@ -150,6 +150,11 @@ namespace Estoka.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(14)
+                        .HasColumnType("character varying(14)")
+                        .HasColumnName("barcode");
+
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid")
                         .HasColumnName("category_id");
@@ -249,6 +254,11 @@ namespace Estoka.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_products");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_products_barcode")
+                        .HasFilter("barcode IS NOT NULL AND is_deleted = false");
 
                     b.HasIndex("CategoryId")
                         .HasDatabaseName("ix_products_category_id");

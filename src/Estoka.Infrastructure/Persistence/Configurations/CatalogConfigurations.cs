@@ -69,6 +69,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.Property(x => x.Name).HasMaxLength(Product.NameMaxLength).IsRequired();
         b.Property(x => x.Description).HasMaxLength(1000);
         b.Property(x => x.ImageUrl).HasMaxLength(500);
+        b.Property(x => x.Barcode).HasMaxLength(Product.BarcodeMaxLength);
         b.Property(x => x.Unit).HasConversion<string>().HasMaxLength(20);
         b.Property(x => x.CurrentStock).IsQuantity();
         b.Property(x => x.MinimumStock).IsQuantity();
@@ -80,6 +81,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
 
         b.HasIndex(x => x.Sku).IsUnique().HasFilter("is_deleted = false");
+        b.HasIndex(x => x.Barcode).IsUnique().HasFilter("barcode IS NOT NULL AND is_deleted = false");
         b.HasIndex(x => x.Name).HasMethod("gin").HasOperators("gin_trgm_ops");
         b.HasIndex(x => x.CategoryId);
         b.HasIndex(x => x.SupplierId);

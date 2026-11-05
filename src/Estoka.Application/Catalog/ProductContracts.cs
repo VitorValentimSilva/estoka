@@ -1,5 +1,6 @@
 using Estoka.Application.Common;
 using Estoka.Domain.Catalog;
+using Estoka.Domain.Common;
 using FluentValidation;
 
 namespace Estoka.Application.Catalog;
@@ -11,7 +12,7 @@ namespace Estoka.Application.Catalog;
 public sealed record ProductListItem(
     Guid Id, string Sku, string Name, string CategoryName, string? SupplierName,
     decimal SalePrice, decimal? CostPrice, decimal? MarginPercent,
-    UnitOfMeasure Unit, decimal CurrentStock, decimal MinimumStock, bool IsActive)
+    UnitOfMeasure Unit, decimal CurrentStock, decimal MinimumStock, bool IsActive, string? Barcode = null)
 {
     public bool IsBelowMinimum => CurrentStock < MinimumStock;
 }
@@ -20,7 +21,7 @@ public sealed record ProductDetails(
     Guid Id, string Sku, string Name, string? Description, Guid CategoryId, string CategoryName,
     Guid? SupplierId, string? SupplierName, decimal SalePrice, decimal? CostPrice, decimal? MarginPercent,
     UnitOfMeasure Unit, decimal CurrentStock, decimal MinimumStock, bool IsActive, string? ImageUrl,
-    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string? UpdatedBy);
+    DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string? UpdatedBy, string? Barcode = null);
 
 public sealed record ProductQuery : PageRequest
 {
@@ -50,6 +51,9 @@ public sealed class ProductInput
     public bool IsActive { get; set; } = true;
     public string? ImageUrl { get; set; }
 
+    /// <summary>Código de barras GTIN (opcional). Aceita leitor USB, câmera ou digitação.</summary>
+    public string? Barcode { get; set; }
+
     /// <summary>Estoque inicial (somente na criação) — gera uma movimentação de ENTRADA.</summary>
     public decimal InitialStock { get; set; }
 
@@ -57,7 +61,7 @@ public sealed class ProductInput
     {
         Sku = p.Sku, Name = p.Name, Description = p.Description, CategoryId = p.CategoryId, SupplierId = p.SupplierId,
         CostPrice = p.CostPrice ?? 0, SalePrice = p.SalePrice, Unit = p.Unit, MinimumStock = p.MinimumStock,
-        IsActive = p.IsActive, ImageUrl = p.ImageUrl,
+        IsActive = p.IsActive, ImageUrl = p.ImageUrl, Barcode = p.Barcode,
     };
 }
 
@@ -77,6 +81,9 @@ public sealed class ProductInputValidator : AbstractValidator<ProductInput>
         RuleFor(x => x.Unit).IsInEnum();
         RuleFor(x => x.MinimumStock).GreaterThanOrEqualTo(0).WithMessage("Estoque mínimo não pode ser negativo.");
         RuleFor(x => x.InitialStock).GreaterThanOrEqualTo(0).WithMessage("Estoque inicial não pode ser negativo.");
+        RuleFor(x => x.Barcode).Must(Gtin.IsValid)
+            .WithMessage("Código de barras inválido: use EAN-13, EAN-8, UPC-A ou GTIN-14 com dígito verificador.")
+            .When(x => !string.IsNullOrWhiteSpace(x.Barcode));
         RuleFor(x => x.ImageUrl).Must(u => string.IsNullOrWhiteSpace(u) || Uri.TryCreate(u, UriKind.Absolute, out _))
             .WithMessage("URL da imagem inválida.").MaximumLength(500);
     }
