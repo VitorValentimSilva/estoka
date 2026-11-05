@@ -44,7 +44,15 @@
                         <div class="d-flex align-center gap-3">
                             <MudAvatar Size="Size.Small" Color="@(context.Item.IsActive ? Color.Primary : Color.Default)">@Initials(context.Item.FullName)</MudAvatar>
                             <div>
-                                <div class="cell-title">@context.Item.FullName @(context.Item.Id == User.UserId ? "(você)" : "")</div>
+                                <div class="cell-title">
+                                    @context.Item.FullName @(context.Item.Id == User.UserId ? "(você)" : "")
+                                    @if (context.Item.IsProtected)
+                                    {
+                                        <MudTooltip Text="Conta de demonstração: protegida contra alterações">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" Class="muted ml-1" Style="vertical-align: middle" />
+                                        </MudTooltip>
+                                    }
+                                </div>
                                 <div class="cell-sub">@context.Item.Email</div>
                             </div>
                         </div>
@@ -53,7 +61,7 @@
                 <PropertyColumn Property="x => x.Role" Title="Papel">
                     <CellTemplate>
                         <MudSelect T="string" Value="context.Item.Role" ValueChanged="r => ChangeRoleAsync(context.Item, r)" Dense Variant="Variant.Outlined"
-                                   Margin="Margin.Dense" Disabled="@(context.Item.Id == User.UserId)" Style="min-width: 150px" aria-label="Papel">
+                                   Margin="Margin.Dense" Disabled="@(context.Item.Id == User.UserId || context.Item.IsProtected)" Style="min-width: 150px" aria-label="Papel">
                             @foreach (var role in Roles.UserRoles)
                             {
                                 <MudSelectItem T="string" Value="role">@role</MudSelectItem>
@@ -67,7 +75,7 @@
                 <PropertyColumn Property="x => x.IsActive" Title="Situação">
                     <CellTemplate>
                         <MudSwitch T="bool" Value="context.Item.IsActive" ValueChanged="v => SetActiveAsync(context.Item, v)" Color="Color.Success"
-                                   Disabled="@(context.Item.Id == User.UserId)" Label="@(context.Item.IsActive ? "Ativo" : "Desativado")" />
+                                   Disabled="@(context.Item.Id == User.UserId || context.Item.IsProtected)" Label="@(context.Item.IsActive ? "Ativo" : "Desativado")" />
                     </CellTemplate>
                 </PropertyColumn>
             </Columns>

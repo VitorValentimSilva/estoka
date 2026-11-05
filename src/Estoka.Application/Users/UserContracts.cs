@@ -4,7 +4,8 @@ using FluentValidation;
 
 namespace Estoka.Application.Users;
 
-public sealed record UserDto(string Id, string FullName, string Email, string Role, bool IsActive, DateTimeOffset CreatedAt);
+/// <param name="IsProtected">Conta de demonstração: não pode ter papel/situação alterados enquanto a demo estiver ligada.</param>
+public sealed record UserDto(string Id, string FullName, string Email, string Role, bool IsActive, DateTimeOffset CreatedAt, bool IsProtected = false);
 
 public sealed class CreateUserInput
 {
