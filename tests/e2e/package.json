@@ -3,7 +3,7 @@
   "private": true,
   "description": "Testes ponta a ponta do Estoka (Playwright)",
   "scripts": {
-    "e2e": "node pedido-vendedor.cjs",
+    "e2e": "node pedido-vendedor.cjs && node codigo-de-barras.cjs",
     "screenshots": "node screenshots.cjs"
   },
   "devDependencies": {
