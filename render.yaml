@@ -17,7 +17,11 @@ services:
       - key: Demo__ResetHour
         value: "4"
       - key: Api__Key
-        generateValue: true    # chave da API gerada pelo Render
+        value: "estoka-demo-key"   # chave PÚBLICA da demo (só papel "Api": sem custo; dados resetados diariamente)
+      - key: Api__ShowKeyInDocs
+        value: "true"              # Scalar já vem com a chave preenchida. Em produção real: generateValue + "false"
+      # - key: OTEL_EXPORTER_OTLP_ENDPOINT   # opcional: Grafana Cloud, Honeycomb, etc.
+      #   sync: false
       - key: Branding__AuthorName
         value: "Vitor Valentim Silva"
       - key: Branding__AuthorUrl

@@ -25,6 +25,8 @@ services:
       Database__RequireSsl: "false"   # Postgres local do compose não tem TLS
       Demo__Enabled: "true"
       Api__Key: "estoka-demo-key"
+      Api__ShowKeyInDocs: "true"
+      # OTEL_EXPORTER_OTLP_ENDPOINT: "http://host.docker.internal:4318"  # opcional: Jaeger/Aspire Dashboard
     ports:
       - "8080:8080"
 
