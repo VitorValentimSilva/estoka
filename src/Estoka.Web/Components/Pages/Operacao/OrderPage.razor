@@ -1,0 +1,449 @@
+@page "/pedidos/novo"
+@page "/pedidos/{Id:guid}"
+@attribute [Authorize(Policy = Policies.ViewOrders)]
+@using Estoka.Application.Catalog
+@using Estoka.Application.Customers
+@using Estoka.Application.Sales
+@using Estoka.Domain.Common
+@using Estoka.Domain.Sales
+@inject SalesOrderService Orders
+@inject CustomerService Customers
+@inject ProductService Products
+@inject ICurrentUser User
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<OrderPage> Logger
+
+<PageHeader Title="@Title" Subtitle="@Subtitle" Breadcrumbs="_crumbs">
+    <Actions>
+        @if (_details is not null)
+        {
+            <OrderStatusChip Status="_details.Status" Size="Size.Large" />
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.PictureAsPdf" Href="@($"/pedidos/{_details.Id}/pdf")" Target="_blank">
+                Imprimir / PDF
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+@if (_loading)
+{
+    <PageLoading Text="Carregando pedido..." />
+}
+else if (_notFound)
+{
+    <EmptyState Icon="@Icons.Material.Outlined.SearchOff" Title="Pedido não encontrado">
+        <MudButton Href="/pedidos" Variant="Variant.Filled" Color="Color.Primary">Voltar aos pedidos</MudButton>
+    </EmptyState>
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="0" Class="card pa-4 mb-4">
+                <MudText Typo="Typo.subtitle1" Class="section-title">Cliente e pagamento</MudText>
+                @if (_editable)
+                {
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="7">
+                            <MudAutocomplete T="CustomerPick" @bind-Value="_customer" SearchFunc="SearchCustomersAsync" Label="Cliente" Variant="Variant.Outlined"
+                                             ToStringFunc="@(c => c is null ? string.Empty : c.ToString())" DebounceInterval="250" Required
+                                             RequiredError="Selecione o cliente." Clearable ResetValueOnEmptyText ShowProgressIndicator
+                                             AdornmentIcon="@Icons.Material.Filled.PersonSearch">
+                                <NoItemsTemplate><MudText Class="pa-2 muted">Nenhum cliente encontrado.</MudText></NoItemsTemplate>
+                            </MudAutocomplete>
+                        </MudItem>
+                        <MudItem xs="12" sm="5">
+                            <MudSelect T="PaymentMethod" @bind-Value="_payment" Label="Forma de pagamento" Variant="Variant.Outlined">
+                                @foreach (var m in Enum.GetValues<PaymentMethod>())
+                                {
+                                    <MudSelectItem T="PaymentMethod" Value="m">@m.Label()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_notes" Label="Observações" Variant="Variant.Outlined" Lines="2" MaxLength="1000" />
+                        </MudItem>
+                    </MudGrid>
+                }
+                else if (_details is not null)
+                {
+                    var c = _details.Customer;
+                    <div class="info-grid">
+                        <div><span class="info-label">Cliente</span><MudLink Href="@($"/pedidos?cliente={c.Id}")" Class="cell-title">@c.Name</MudLink>
+                            <div class="cell-sub mono">@DocumentValidator.Format(c.Document)</div></div>
+                        <div><span class="info-label">Contato</span><div>@c.Email</div><div class="cell-sub">@UiExtensions.Phone(c.Phone)</div></div>
+                        <div><span class="info-label">Pagamento</span><div>@_details.PaymentMethod.Label()</div></div>
+                        <div><span class="info-label">Vendedor</span><div>@_details.SellerName</div></div>
+                        @if (!string.IsNullOrWhiteSpace(_details.Notes))
+                        {
+                            <div class="info-grid__full"><span class="info-label">Observações</span><div>@_details.Notes</div></div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+
+            <MudPaper Elevation="0" Class="card pa-4">
+                <div class="d-flex align-center justify-space-between mb-2">
+                    <MudText Typo="Typo.subtitle1" Class="section-title mb-0">Itens</MudText>
+                    <span class="muted">@_lines.Count @(_lines.Count == 1 ? "item" : "itens")</span>
+                </div>
+                @if (_editable)
+                {
+                    <MudAutocomplete T="ProductPick" @ref="_productPicker" Value="_pickedProduct" ValueChanged="AddProductAsync" SearchFunc="SearchProductsAsync"
+                                     Placeholder="Adicionar produto: digite nome ou SKU" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     ToStringFunc="@(p => p?.ToString() ?? string.Empty)" DebounceInterval="250" ShowProgressIndicator Clearable
+                                     AdornmentIcon="@Icons.Material.Filled.AddShoppingCart" Class="mb-3" MaxItems="15">
+                        <ItemTemplate Context="p">
+                            <div class="d-flex justify-space-between align-center gap-4" style="width: 100%">
+                                <div><div class="cell-title">@p.Name</div><div class="cell-sub mono">@p.Sku</div></div>
+                                <div class="text-right nowrap">
+                                    <div class="num">@p.SalePrice.Money()</div>
+                                    <div class="cell-sub @(p.CurrentStock <= 0 ? "qty-warn" : "")">@p.CurrentStock.Qty() @p.Unit.Abbreviation() em estoque</div>
+                                </div>
+                            </div>
+                        </ItemTemplate>
+                        <NoItemsTemplate><MudText Class="pa-2 muted">Nenhum produto encontrado.</MudText></NoItemsTemplate>
+                    </MudAutocomplete>
+                }
+
+                @if (_lines.Count == 0)
+                {
+                    <EmptyState Icon="@Icons.Material.Outlined.ShoppingCart" Title="Nenhum item ainda" Description="Busque um produto acima para adicioná-lo ao pedido." />
+                }
+                else
+                {
+                    @if (!_editable)
+                    {
+                        @* Celular: lista compacta no lugar da tabela *@
+                        <div class="order-lines d-sm-none">
+                            @foreach (var line in _lines)
+                            {
+                                <div class="order-lines__row">
+                                    <div>
+                                        <div class="cell-title">@line.Name</div>
+                                        <div class="cell-sub"><span class="mono">@line.Sku</span> · @line.Quantity.Qty() @line.Unit.Abbreviation() × @line.UnitPrice.Money()@(line.Discount > 0 ? $" − {line.Discount.Money()}" : "")</div>
+                                    </div>
+                                    <div class="num cell-title nowrap">@line.Total.Money()</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <div class="table-scroll @(_editable ? "" : "d-none d-sm-block")">
+                        <MudSimpleTable Dense Elevation="0" Class="order-items">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th class="text-right" style="width: 120px">Qtd.</th>
+                                    <th class="text-right" style="width: 130px">Preço unit.</th>
+                                    <th class="text-right" style="width: 120px">Desconto</th>
+                                    <th class="text-right" style="width: 120px">Total</th>
+                                    @if (_editable) { <th style="width: 40px"></th> }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in _lines)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="cell-title">@line.Name</div>
+                                            <div class="cell-sub">
+                                                <span class="mono">@line.Sku</span>
+                                                @if (_editable || _details?.Status == SalesOrderStatus.Rascunho)
+                                                {
+                                                    <span class="@(line.Quantity > line.Available ? "qty-warn" : "")"> · @line.Available.Qty() @line.Unit.Abbreviation() disponíveis</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        @if (_editable)
+                                        {
+                                            <td><MudNumericField T="decimal" @bind-Value="line.Quantity" Min="0.001m" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                                 Format="#,##0.###" Culture="UiExtensions.PtBr" Immediate Class="cell-input" aria-label="Quantidade" /></td>
+                                            <td>
+                                                @if (_canChangePrice)
+                                                {
+                                                    <MudNumericField T="decimal" @bind-Value="line.UnitPrice" Min="0m" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                                     Format="N2" Culture="UiExtensions.PtBr" HideSpinButtons Immediate Class="cell-input" aria-label="Preço unitário" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="text-right num">@line.UnitPrice.Money()</div>
+                                                }
+                                            </td>
+                                            <td><MudNumericField T="decimal" @bind-Value="line.Discount" Min="0m" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                                 Format="N2" Culture="UiExtensions.PtBr" HideSpinButtons Immediate Class="cell-input" aria-label="Desconto" /></td>
+                                            <td class="text-right num cell-title nowrap">@line.Total.Money()</td>
+                                            <td><MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => _lines.Remove(line)" aria-label="Remover item" /></td>
+                                        }
+                                        else
+                                        {
+                                            <td class="text-right num nowrap">@line.Quantity.Qty() <span class="muted">@line.Unit.Abbreviation()</span></td>
+                                            <td class="text-right num nowrap">@line.UnitPrice.Money()</td>
+                                            <td class="text-right num nowrap muted">@(line.Discount > 0 ? line.Discount.Money() : "—")</td>
+                                            <td class="text-right num cell-title nowrap">@line.Total.Money()</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <div class="sticky-side">
+                <MudPaper Elevation="0" Class="card pa-4 mb-4">
+                    <MudText Typo="Typo.subtitle1" Class="section-title">Resumo</MudText>
+                    <div class="summary-row"><span>Subtotal</span><span class="num">@Subtotal.Money()</span></div>
+                    <div class="summary-row">
+                        <span>Desconto no pedido</span>
+                        @if (_editable)
+                        {
+                            <MudNumericField T="decimal" @bind-Value="_discount" Min="0m" Variant="Variant.Outlined" Margin="Margin.Dense" Format="N2"
+                                             Culture="UiExtensions.PtBr" HideSpinButtons Immediate Class="summary-input" Adornment="Adornment.Start" AdornmentText="R$" aria-label="Desconto do pedido" />
+                        }
+                        else
+                        {
+                            <span class="num">@(_discount > 0 ? "− " + _discount.Money() : "—")</span>
+                        }
+                    </div>
+                    <MudDivider Class="my-3" />
+                    <div class="summary-row summary-row--total"><span>Total</span><span class="num">@Total.Money()</span></div>
+                    @if (Total < 0)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense Class="mt-2">O desconto é maior que o subtotal.</MudAlert>
+                    }
+
+                    <div class="order-actions">
+                        @if (_editable)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth StartIcon="@Icons.Material.Filled.CheckCircle"
+                                       OnClick="ConfirmAsync" Disabled="@(_busy || !CanSave)">Confirmar pedido</MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth StartIcon="@Icons.Material.Outlined.Save"
+                                       OnClick="SaveDraftAsync" Disabled="@(_busy || !CanSave)">Salvar rascunho</MudButton>
+                            <MudText Typo="Typo.caption" Class="muted">Confirmar baixa o estoque dos itens. Rascunhos não reservam estoque.</MudText>
+                        }
+                        @if (_details is not null && _canManage)
+                        {
+                            @if (_details.Status == SalesOrderStatus.Confirmado)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Tertiary" FullWidth StartIcon="@Icons.Material.Outlined.RequestQuote"
+                                           OnClick="() => ChangeStatusAsync(SalesOrderStatus.Faturado)" Disabled="_busy">Faturar</MudButton>
+                            }
+                            @if (_details.Status == SalesOrderStatus.Faturado)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth StartIcon="@Icons.Material.Outlined.LocalShipping"
+                                           OnClick="() => ChangeStatusAsync(SalesOrderStatus.Entregue)" Disabled="_busy">Marcar como entregue</MudButton>
+                            }
+                            @if (_details.AllowedTransitions.Contains(SalesOrderStatus.Cancelado))
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Error" FullWidth StartIcon="@Icons.Material.Outlined.Cancel"
+                                           OnClick="CancelAsync" Disabled="_busy">Cancelar pedido</MudButton>
+                            }
+                        }
+                    </div>
+                </MudPaper>
+
+                @if (_details is not null)
+                {
+                    <MudPaper Elevation="0" Class="card pa-4">
+                        <MudText Typo="Typo.subtitle1" Class="section-title">Histórico</MudText>
+                        <MudTimeline TimelinePosition="TimelinePosition.Start" Class="order-timeline">
+                            <TimelineStep Title="Pedido criado" When="_details.OrderDate" Color="Color.Default" Detail="@_details.SellerName" />
+                            @if (_details.ConfirmedAt is { } confirmed) { <TimelineStep Title="Confirmado — estoque baixado" When="confirmed" Color="Color.Info" /> }
+                            @if (_details.InvoicedAt is { } invoiced) { <TimelineStep Title="Faturado" When="invoiced" Color="Color.Tertiary" /> }
+                            @if (_details.DeliveredAt is { } delivered) { <TimelineStep Title="Entregue" When="delivered" Color="Color.Success" /> }
+                            @if (_details.CanceledAt is { } canceled) { <TimelineStep Title="Cancelado" When="canceled" Color="Color.Error" Detail="@_details.CancelReason" /> }
+                        </MudTimeline>
+                    </MudPaper>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private List<BreadcrumbItem> _crumbs = [];
+    private SalesOrderDetails? _details;
+    private readonly List<Line> _lines = [];
+    private CustomerPick? _customer;
+    private PaymentMethod _payment = PaymentMethod.Pix;
+    private string? _notes;
+    private decimal _discount;
+    private ProductPick? _pickedProduct;
+    private MudAutocomplete<ProductPick>? _productPicker;
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _busy;
+    private bool _editable;
+    private bool _canManage;
+    private bool _canChangePrice;
+
+    private decimal Subtotal => _lines.Sum(l => l.Total);
+    private decimal Total => Subtotal - _discount;
+    private bool CanSave => _customer is not null && _lines.Count > 0 && Total >= 0 && _lines.All(l => l.Quantity > 0 && l.Total >= 0);
+
+    private string Title => _details is null ? "Novo pedido" : $"Pedido {_details.Code}";
+    private string Subtitle => _details is null
+        ? "Monte o pedido; o estoque só é baixado na confirmação"
+        : $"{_details.Customer.Name} · {_details.OrderDate.Local()}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _canManage = User.Can(Permission.ManageOrders);
+        _canChangePrice = User.Can(Permission.ViewCost);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _lines.Clear();
+        if (Id is not { } id)
+        {
+            _details = null;
+            _editable = _canManage;
+            if (!_canManage) Navigation.NavigateTo("/acesso-negado");
+        }
+        else
+        {
+            try
+            {
+                _details = await Orders.GetAsync(id);
+                _editable = _canManage && _details.IsEditable;
+                _customer = new CustomerPick(_details.Customer.Id, _details.Customer.Name, _details.Customer.Document);
+                _payment = _details.PaymentMethod;
+                _notes = _details.Notes;
+                _discount = _details.Discount;
+                _lines.AddRange(_details.Items.Select(i => new Line
+                {
+                    ProductId = i.ProductId, Sku = i.Sku, Name = i.ProductName, Unit = i.Unit, Available = i.AvailableStock,
+                    Quantity = i.Quantity, UnitPrice = i.UnitPrice, Discount = i.Discount,
+                }));
+            }
+            catch (NotFoundException)
+            {
+                _notFound = true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Falha ao carregar pedido {Id}", id);
+                Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+                _notFound = true;
+            }
+        }
+        _crumbs = [new("Operação", null, disabled: true), new("Pedidos", "/pedidos"), new(_details?.Code ?? "Novo", null, disabled: true)];
+        _loading = false;
+    }
+
+    private async Task<IEnumerable<CustomerPick>> SearchCustomersAsync(string? term, CancellationToken ct) => await Customers.SearchAsync(term, 15, ct);
+    private async Task<IEnumerable<ProductPick>> SearchProductsAsync(string? term, CancellationToken ct) => await Products.SearchForSaleAsync(term, 15, ct);
+
+    private async Task AddProductAsync(ProductPick? product)
+    {
+        if (product is null) return;
+        var existing = _lines.FirstOrDefault(l => l.ProductId == product.Id);
+        if (existing is not null) existing.Quantity += 1;
+        else _lines.Add(new Line
+        {
+            ProductId = product.Id, Sku = product.Sku, Name = product.Name, Unit = product.Unit, Available = product.CurrentStock,
+            Quantity = 1, UnitPrice = product.SalePrice,
+        });
+        _pickedProduct = null;
+        if (_productPicker is not null) await _productPicker.ClearAsync();
+    }
+
+    private SalesOrderInput BuildInput() => new()
+    {
+        CustomerId = _customer!.Id,
+        PaymentMethod = _payment,
+        Discount = _discount,
+        Notes = _notes,
+        Items = _lines.Select(l => new SalesOrderItemInput { ProductId = l.ProductId, Quantity = l.Quantity, UnitPrice = l.UnitPrice, Discount = l.Discount }).ToList(),
+    };
+
+    private async Task<Guid?> SaveAsync()
+    {
+        Guid? savedId = null;
+        await Snackbar.RunAsync(async () =>
+        {
+            if (Id is { } id)
+            {
+                await Orders.UpdateDraftAsync(id, BuildInput());
+                savedId = id;
+            }
+            else
+            {
+                savedId = await Orders.CreateDraftAsync(BuildInput());
+            }
+        }, logger: Logger);
+        return savedId;
+    }
+
+    private async Task SaveDraftAsync()
+    {
+        _busy = true;
+        var id = await SaveAsync();
+        _busy = false;
+        if (id is null) return;
+        Snackbar.Add("Rascunho salvo.", Severity.Success);
+        if (Id is null) Navigation.NavigateTo($"/pedidos/{id}");
+        else await LoadAsync();
+    }
+
+    private async Task ConfirmAsync()
+    {
+        _busy = true;
+        var id = await SaveAsync();
+        if (id is not null)
+        {
+            var ok = await Snackbar.RunAsync(() => Orders.ConfirmAsync(id.Value), "Pedido confirmado e estoque atualizado.", Logger);
+            if (!ok && Id is null) Snackbar.Add("O pedido foi salvo como rascunho.", Severity.Info);
+            _busy = false;
+            if (Id != id) { Navigation.NavigateTo($"/pedidos/{id}"); return; }
+            await LoadAsync();
+        }
+        _busy = false;
+    }
+
+    private async Task ChangeStatusAsync(SalesOrderStatus target)
+    {
+        _busy = true;
+        var ok = await Snackbar.RunAsync(() => target == SalesOrderStatus.Faturado ? Orders.InvoiceAsync(Id!.Value) : Orders.DeliverAsync(Id!.Value),
+            target == SalesOrderStatus.Faturado ? "Pedido faturado." : "Entrega registrada.", Logger);
+        _busy = false;
+        if (ok) await LoadAsync();
+    }
+
+    private async Task CancelAsync()
+    {
+        var returnsStock = _details!.Status is SalesOrderStatus.Confirmado or SalesOrderStatus.Faturado;
+        var reason = await Dialogs.ConfirmAsync("Cancelar pedido",
+            returnsStock ? "O estoque dos itens será devolvido (movimentação de DEVOLUÇÃO). Deseja cancelar o pedido?" : "Deseja cancelar este pedido?",
+            "Cancelar pedido", Color.Error, askReason: true);
+        if (reason is null) return;
+        _busy = true;
+        var ok = await Snackbar.RunAsync(() => Orders.CancelAsync(Id!.Value, reason), "Pedido cancelado.", Logger);
+        _busy = false;
+        if (ok) await LoadAsync();
+    }
+
+    private sealed class Line
+    {
+        public Guid ProductId { get; init; }
+        public string Sku { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public UnitOfMeasure Unit { get; init; }
+        public decimal Available { get; init; }
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal Total => Math.Round(Quantity * UnitPrice, 2) - Discount;
+    }
+}

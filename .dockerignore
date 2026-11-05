@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/*.user
+**/node_modules/
+.git/
+.github/
+tests/
+docs/
+*.md
+Dockerfile
+docker-compose*.yml
+render.yaml

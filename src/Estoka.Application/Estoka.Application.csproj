@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Estoka.Domain\Estoka.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- PostgreSQL-first: usamos ILIKE e índices trigram nas buscas (decisão documentada no README) -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Estoka.UnitTests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,126 @@
+@page "/pedidos"
+@attribute [Authorize(Policy = Policies.ViewOrders)]
+@using Estoka.Application.Customers
+@using Estoka.Application.Sales
+@using Estoka.Domain.Sales
+@inject SalesOrderService Orders
+@inject CustomerService Customers
+@inject ICurrentUser User
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageHeader Title="Pedidos de venda" Subtitle="Do rascunho à entrega, com baixa automática de estoque" Breadcrumbs="_crumbs">
+    <Actions>
+        @if (User.Can(Permission.ManageOrders))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddShoppingCart" Href="/pedidos/novo">
+                Novo pedido
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+<MudPaper Elevation="0" Class="card">
+    <div class="toolbar">
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged" Placeholder="Nº do pedido ou cliente" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable DebounceInterval="350" Class="grow" />
+        <MudSelect T="SalesOrderStatus?" Value="_status" ValueChanged="OnStatusChanged" Placeholder="Todos os status" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Clearable Dense ToStringFunc="@(s => s?.Label() ?? string.Empty)">
+            @foreach (var s in Enum.GetValues<SalesOrderStatus>())
+            {
+                <MudSelectItem T="SalesOrderStatus?" Value="s">@s.Label()</MudSelectItem>
+            }
+        </MudSelect>
+        <MudDateRangePicker DateRange="_range" DateRangeChanged="OnRangeChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
+                            PlaceholderStart="De" PlaceholderEnd="Até" Clearable AutoClose Culture="UiExtensions.PtBr" />
+        <MudAutocomplete T="CustomerPick" Value="_customer" ValueChanged="OnCustomerChanged" SearchFunc="SearchCustomersAsync" Placeholder="Cliente"
+                         Variant="Variant.Outlined" Margin="Margin.Dense" Clearable ResetValueOnEmptyText DebounceInterval="300"
+                         ToStringFunc="@(c => c?.Name ?? string.Empty)" Class="customer-filter" />
+    </div>
+
+    <MudDataGrid @ref="_grid" T="SalesOrderListItem" ServerData="LoadAsync" Dense Hover RowsPerPage="25" Elevation="0" Class="data-grid clickable-rows"
+                 Breakpoint="Breakpoint.None" SortMode="SortMode.Single" RowClick="@(e => Navigation.NavigateTo($"/pedidos/{e.Item.Id}"))">
+        <Columns>
+            <PropertyColumn Property="x => x.Number" Title="Pedido" CellClass="nowrap">
+                <CellTemplate><span class="mono cell-title">@context.Item.Code</span></CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.OrderDate" Title="Data" CellClass="nowrap">
+                <CellTemplate>@context.Item.OrderDate.Local()</CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.CustomerName" Title="Cliente">
+                <CellTemplate>
+                    <div class="cell-title">@context.Item.CustomerName</div>
+                    <div class="cell-sub">@context.Item.ItemCount @(context.Item.ItemCount == 1 ? "item" : "itens") · @context.Item.PaymentMethod.Label()</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Status" Title="Status">
+                <CellTemplate><OrderStatusChip Status="context.Item.Status" /></CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.SellerName" Title="Vendedor" Sortable="false" CellClass="nowrap muted" />
+            <PropertyColumn Property="x => x.Total" Title="Total" HeaderClass="text-right" CellClass="text-right nowrap num cell-title">
+                <CellTemplate>@context.Item.Total.Money()</CellTemplate>
+            </PropertyColumn>
+        </Columns>
+        <NoRecordsContent>
+            <EmptyState Icon="@Icons.Material.Outlined.ReceiptLong" Title="Nenhum pedido encontrado" Description="Ajuste os filtros ou crie um novo pedido." />
+        </NoRecordsContent>
+        <LoadingContent><PageLoading Text="Carregando pedidos..." /></LoadingContent>
+        <PagerContent>
+            <MudDataGridPager T="SalesOrderListItem" PageSizeOptions="[10, 25, 50, 100]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" />
+        </PagerContent>
+    </MudDataGrid>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "cliente")] public Guid? CustomerQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? StatusQuery { get; set; }
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Operação", null, disabled: true), new("Pedidos", null, disabled: true)];
+    private MudDataGrid<SalesOrderListItem> _grid = default!;
+    private string? _search;
+    private SalesOrderStatus? _status;
+    private DateRange? _range;
+    private CustomerPick? _customer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Enum.TryParse<SalesOrderStatus>(StatusQuery, true, out var s)) _status = s;
+        if (CustomerQuery is { } id)
+        {
+            try
+            {
+                var c = await Customers.GetAsync(id);
+                _customer = new CustomerPick(c.Id, c.Name, c.Document);
+            }
+            catch (Exception ex) { Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Warning); }
+        }
+    }
+
+    private async Task<GridData<SalesOrderListItem>> LoadAsync(GridState<SalesOrderListItem> state, CancellationToken ct)
+    {
+        try
+        {
+            var sort = state.SortDefinitions.FirstOrDefault();
+            var result = await Orders.GetPagedAsync(new SalesOrderQuery
+            {
+                Page = state.Page, PageSize = state.PageSize, SortBy = sort?.SortBy, SortDescending = sort?.Descending ?? true,
+                Search = _search, Status = _status, CustomerId = _customer?.Id,
+                From = _range?.Start is { } st ? DateOnly.FromDateTime(st) : null,
+                To = _range?.End is { } en ? DateOnly.FromDateTime(en) : null,
+            }, ct);
+            return new GridData<SalesOrderListItem> { Items = result.Items, TotalItems = result.TotalCount };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            return new GridData<SalesOrderListItem> { Items = [], TotalItems = 0 };
+        }
+    }
+
+    private async Task<IEnumerable<CustomerPick>> SearchCustomersAsync(string? term, CancellationToken ct) => await Customers.SearchAsync(term, 15, ct);
+
+    private Task OnSearchChanged(string? v) { _search = v; return _grid.ReloadServerData(); }
+    private Task OnStatusChanged(SalesOrderStatus? v) { _status = v; return _grid.ReloadServerData(); }
+    private Task OnRangeChanged(DateRange? v) { _range = v; return _grid.ReloadServerData(); }
+    private Task OnCustomerChanged(CustomerPick? v) { _customer = v; return _grid.ReloadServerData(); }
+}

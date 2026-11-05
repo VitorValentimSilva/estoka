@@ -1,0 +1,48 @@
+@using Estoka.Application.Inventory
+@using Estoka.Domain.Inventory
+@using Estoka.Domain.Catalog
+
+<MudSimpleTable Dense Hover Elevation="0" Class="movement-table">
+    <thead>
+        <tr>
+            <th>Data</th>
+            @if (ShowProduct) { <th>Produto</th> }
+            <th>Tipo</th>
+            <th class="text-right">Qtd.</th>
+            <th class="text-right">Saldo</th>
+            <th>Motivo</th>
+            <th>Usuário</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var m in Items)
+        {
+            <tr>
+                <td class="nowrap">@m.OccurredAt.Local()</td>
+                @if (ShowProduct)
+                {
+                    <td><div class="cell-title">@m.ProductName</div><div class="cell-sub mono">@m.Sku</div></td>
+                }
+                <td><MovementTypeChip Type="m.Type" /></td>
+                <td class="text-right nowrap num @(m.Quantity < 0 ? "qty-out" : "qty-in")">@(m.Quantity > 0 ? "+" : "")@m.Quantity.Qty()</td>
+                <td class="text-right nowrap num">@m.BalanceAfter.Qty() <span class="muted">@m.Unit.Abbreviation()</span></td>
+                <td>
+                    @if (m.SalesOrderId is { } orderId)
+                    {
+                        <MudLink Href="@($"/pedidos/{orderId}")">@m.Reason</MudLink>
+                    }
+                    else
+                    {
+                        @m.Reason
+                    }
+                </td>
+                <td class="nowrap muted">@m.UserName</td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<StockMovementDto> Items { get; set; } = [];
+    [Parameter] public bool ShowProduct { get; set; } = true;
+}

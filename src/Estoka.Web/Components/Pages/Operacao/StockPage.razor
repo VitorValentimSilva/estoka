@@ -1,0 +1,178 @@
+@page "/estoque"
+@attribute [Authorize(Policy = Policies.ViewStock)]
+@using Estoka.Application.Catalog
+@using Estoka.Application.Inventory
+@using Estoka.Domain.Inventory
+@inject StockService Stock
+@inject ProductService Products
+@inject ICurrentUser User
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageHeader Title="Estoque" Subtitle="Entradas, saídas, ajustes e devoluções — o saldo é sempre a soma das movimentações" Breadcrumbs="_crumbs">
+    <Actions>
+        @if (_canManage)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Tune" OnClick="() => OpenDialogAsync(StockMovementType.Ajuste, null)">
+                Ajuste de inventário
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddBox" OnClick="() => OpenDialogAsync(StockMovementType.Entrada, null)">
+                Registrar entrada
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+<MudPaper Elevation="0" Class="card">
+    <div class="toolbar">
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged" Placeholder="Buscar produto, SKU ou motivo" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable DebounceInterval="350" Class="grow" />
+        <MudSelect T="StockMovementType?" Value="_type" ValueChanged="OnTypeChanged" Placeholder="Todos os tipos" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Clearable Dense ToStringFunc="@(t => t is null ? string.Empty : TypeLabel(t.Value))">
+            @foreach (var t in Enum.GetValues<StockMovementType>())
+            {
+                <MudSelectItem T="StockMovementType?" Value="t">@TypeLabel(t)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudDateRangePicker DateRange="_range" DateRangeChanged="OnRangeChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
+                            PlaceholderStart="Início" PlaceholderEnd="Fim" Clearable AutoClose Class="date-range" Culture="UiExtensions.PtBr" />
+        @if (_productFilter is not null)
+        {
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" OnClose="ClearProductFilter">Produto: @_productFilter</MudChip>
+        }
+    </div>
+
+    <MudDataGrid @ref="_grid" T="StockMovementDto" ServerData="LoadAsync" Dense Hover RowsPerPage="25" Elevation="0" Class="data-grid"
+                 Breakpoint="Breakpoint.None" SortMode="SortMode.Single">
+        <Columns>
+            <PropertyColumn Property="x => x.OccurredAt" Title="Data" CellClass="nowrap">
+                <CellTemplate>@context.Item.OccurredAt.Local()</CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.ProductName" Title="Produto" CellStyle="min-width: 220px">
+                <CellTemplate>
+                    <div class="cell-title">@context.Item.ProductName</div>
+                    <div class="cell-sub mono">@context.Item.Sku</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Type" Title="Tipo" Sortable="false">
+                <CellTemplate><MovementTypeChip Type="context.Item.Type" /></CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Quantity" Title="Qtd." HeaderClass="text-right" CellClass="text-right nowrap num">
+                <CellTemplate>
+                    <span class="@(context.Item.Quantity < 0 ? "qty-out" : "qty-in")">@(context.Item.Quantity > 0 ? "+" : "")@context.Item.Quantity.Qty()</span>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.BalanceAfter" Title="Saldo após" Sortable="false" HeaderClass="text-right" CellClass="text-right nowrap num">
+                <CellTemplate>@context.Item.BalanceAfter.Qty() <span class="muted">@context.Item.Unit.Abbreviation()</span></CellTemplate>
+            </PropertyColumn>
+            @if (_canViewCost)
+            {
+                <PropertyColumn Property="x => x.UnitCost" Title="Custo unit." Sortable="false" HeaderClass="text-right" CellClass="text-right nowrap num muted">
+                    <CellTemplate>@context.Item.UnitCost.Money()</CellTemplate>
+                </PropertyColumn>
+            }
+            <PropertyColumn Property="x => x.Reason" Title="Motivo" Sortable="false">
+                <CellTemplate>
+                    @if (context.Item.SalesOrderId is { } orderId)
+                    {
+                        <MudLink Href="@($"/pedidos/{orderId}")" Class="nowrap">@context.Item.Reason</MudLink>
+                    }
+                    else
+                    {
+                        @context.Item.Reason
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.UserName" Title="Usuário" Sortable="false" CellClass="nowrap muted" />
+        </Columns>
+        <NoRecordsContent>
+            <EmptyState Icon="@Icons.Material.Outlined.SwapVert" Title="Nenhuma movimentação encontrada" Description="Ajuste os filtros ou o período." />
+        </NoRecordsContent>
+        <LoadingContent><PageLoading Text="Carregando movimentações..." /></LoadingContent>
+        <PagerContent>
+            <MudDataGridPager T="StockMovementDto" PageSizeOptions="[25, 50, 100]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" />
+        </PagerContent>
+    </MudDataGrid>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "produto")] public Guid? ProductQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "entrada")] public Guid? EntryProductQuery { get; set; }
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Operação", null, disabled: true), new("Estoque", null, disabled: true)];
+    private MudDataGrid<StockMovementDto> _grid = default!;
+    private string? _search;
+    private StockMovementType? _type;
+    private DateRange? _range;
+    private Guid? _productId;
+    private string? _productFilter;
+    private bool _canManage;
+    private bool _canViewCost;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canManage = User.Can(Permission.ManageStock);
+        _canViewCost = User.Can(Permission.ViewCost);
+        if (ProductQuery is { } id)
+        {
+            _productId = id;
+            try { _productFilter = (await Products.GetAsync(id)).Name; } catch { _productId = null; }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && EntryProductQuery is { } productId && _canManage)
+            await OpenDialogAsync(StockMovementType.Entrada, productId);
+    }
+
+    private static string TypeLabel(StockMovementType t) => t switch
+    {
+        StockMovementType.Entrada => "Entrada",
+        StockMovementType.Saida => "Saída",
+        StockMovementType.Ajuste => "Ajuste",
+        _ => "Devolução",
+    };
+
+    private async Task<GridData<StockMovementDto>> LoadAsync(GridState<StockMovementDto> state, CancellationToken ct)
+    {
+        try
+        {
+            var sort = state.SortDefinitions.FirstOrDefault();
+            var result = await Stock.GetMovementsAsync(new StockMovementQuery
+            {
+                Page = state.Page, PageSize = state.PageSize, SortBy = sort?.SortBy, SortDescending = sort?.Descending ?? true,
+                Search = _search, Type = _type, ProductId = _productId,
+                From = _range?.Start is { } s ? DateOnly.FromDateTime(s) : null,
+                To = _range?.End is { } e ? DateOnly.FromDateTime(e) : null,
+            }, ct);
+            return new GridData<StockMovementDto> { Items = result.Items, TotalItems = result.TotalCount };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            return new GridData<StockMovementDto> { Items = [], TotalItems = 0 };
+        }
+    }
+
+    private Task OnSearchChanged(string? v) { _search = v; return _grid.ReloadServerData(); }
+    private Task OnTypeChanged(StockMovementType? v) { _type = v; return _grid.ReloadServerData(); }
+    private Task OnRangeChanged(DateRange? v) { _range = v; return _grid.ReloadServerData(); }
+
+    private Task ClearProductFilter()
+    {
+        _productId = null;
+        _productFilter = null;
+        Navigation.NavigateTo("/estoque", replace: true);
+        return _grid.ReloadServerData();
+    }
+
+    private async Task OpenDialogAsync(StockMovementType type, Guid? productId)
+    {
+        var parameters = new DialogParameters<StockMovementDialog> { { x => x.Type, type }, { x => x.ProductId, productId } };
+        var title = type == StockMovementType.Entrada ? "Registrar entrada" : "Ajuste de inventário";
+        var dialog = await Dialogs.ShowAsync<StockMovementDialog>(title, parameters, DialogExtensions.FormOptions);
+        if (await dialog.Result is { Canceled: false }) await _grid.ReloadServerData();
+    }
+}

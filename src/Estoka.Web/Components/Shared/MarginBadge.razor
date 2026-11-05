@@ -1,0 +1,7 @@
+<span class="margin-badge @Css">@Value.Percent()</span>
+
+@code {
+    [Parameter] public decimal Value { get; set; }
+
+    private string Css => Value >= 30 ? "margin-badge--high" : Value >= 15 ? "margin-badge--mid" : "margin-badge--low";
+}

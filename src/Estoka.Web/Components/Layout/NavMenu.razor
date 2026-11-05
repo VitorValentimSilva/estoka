@@ -1,0 +1,38 @@
+<MudNavMenu Class="nav-menu" Rounded Margin="Margin.Dense" Color="Color.Primary">
+    <AuthorizeView Policy="@Policies.ViewDashboard">
+        <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.SpaceDashboard">Dashboard</MudNavLink>
+    </AuthorizeView>
+
+    <div class="nav-section">Cadastros</div>
+    <AuthorizeView Policy="@Policies.ViewCatalog">
+        <MudNavLink Href="/produtos" Icon="@Icons.Material.Outlined.Inventory2">Produtos</MudNavLink>
+    </AuthorizeView>
+    <AuthorizeView Policy="@Policies.ManageCatalog">
+        <MudNavLink Href="/categorias" Icon="@Icons.Material.Outlined.Category">Categorias</MudNavLink>
+        <MudNavLink Href="/fornecedores" Icon="@Icons.Material.Outlined.LocalShipping">Fornecedores</MudNavLink>
+    </AuthorizeView>
+    <AuthorizeView Policy="@Policies.ViewCustomers">
+        <MudNavLink Href="/clientes" Icon="@Icons.Material.Outlined.People">Clientes</MudNavLink>
+    </AuthorizeView>
+
+    <div class="nav-section">Operação</div>
+    <AuthorizeView Policy="@Policies.ViewOrders">
+        <MudNavLink Href="/pedidos" Icon="@Icons.Material.Outlined.ReceiptLong">Pedidos</MudNavLink>
+    </AuthorizeView>
+    <AuthorizeView Policy="@Policies.ViewStock">
+        <MudNavLink Href="/estoque" Icon="@Icons.Material.Outlined.SwapVert">Estoque</MudNavLink>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="@Policies.ViewReports">
+        <div class="nav-section">Análise</div>
+        <MudNavLink Href="/relatorios" Icon="@Icons.Material.Outlined.Assessment">Relatórios</MudNavLink>
+    </AuthorizeView>
+
+    <AuthorizeView Policy="@Policies.ViewAudit">
+        <div class="nav-section">Administração</div>
+        <AuthorizeView Policy="@Policies.ManageUsers" Context="users">
+            <MudNavLink Href="/usuarios" Icon="@Icons.Material.Outlined.ManageAccounts">Usuários</MudNavLink>
+        </AuthorizeView>
+        <MudNavLink Href="/auditoria" Icon="@Icons.Material.Outlined.History">Auditoria</MudNavLink>
+    </AuthorizeView>
+</MudNavMenu>

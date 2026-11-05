@@ -1,0 +1,29 @@
+<MudPaper Elevation="0" Class="card kpi">
+    <div class="kpi__head">
+        <span class="kpi__label">@Label</span>
+        <span class="kpi__icon" style="--kpi-color: @Accent"><MudIcon Icon="@Icon" Size="Size.Small" /></span>
+    </div>
+    <div class="kpi__value num">@Value</div>
+    <div class="kpi__foot">
+        @if (Change is { } change)
+        {
+            <span class="kpi__change @(change >= 0 == !InvertTrend ? "is-up" : "is-down")">
+                <MudIcon Icon="@(change >= 0 ? Icons.Material.Filled.TrendingUp : Icons.Material.Filled.TrendingDown)" Size="Size.Small" />
+                @(change >= 0 ? "+" : "")@change.ToString("0.0", UiExtensions.PtBr)%
+            </span>
+        }
+        <span class="muted">@Hint</span>
+        @if (ChildContent is not null) { @ChildContent }
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.Insights;
+    [Parameter] public string Accent { get; set; } = "#0F766E";
+    [Parameter] public decimal? Change { get; set; }
+    [Parameter] public bool InvertTrend { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

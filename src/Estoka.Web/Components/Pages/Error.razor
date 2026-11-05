@@ -1,0 +1,21 @@
+@page "/erro"
+@attribute [AllowAnonymous]
+@layout AuthLayout
+@using System.Diagnostics
+
+<PageTitle>Erro · Estoka</PageTitle>
+
+<div class="auth"><section class="auth__panel"><div class="auth__card">
+    <h1>Algo deu errado</h1>
+    <p class="auth__subtitle">Ocorreu um erro ao processar sua solicitação. Tente novamente em instantes.</p>
+    @if (RequestId is not null)
+    {
+        <p class="auth__subtitle"><small>Código do erro: <code>@RequestId</code></small></p>
+    }
+    <a class="auth__submit" href="/">Voltar ao início</a>
+</div></section></div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private string? RequestId => Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

@@ -1,0 +1,27 @@
+@using Estoka.Application.Sales
+@using Estoka.Domain.Sales
+
+<MudChip T="string" Size="@Size" Variant="Variant.Text" Color="StatusColor" Icon="@StatusIcon" Class="status-chip">@Status.Label()</MudChip>
+
+@code {
+    [Parameter] public SalesOrderStatus Status { get; set; }
+    [Parameter] public Size Size { get; set; } = Size.Small;
+
+    private Color StatusColor => Status switch
+    {
+        SalesOrderStatus.Rascunho => Color.Default,
+        SalesOrderStatus.Confirmado => Color.Info,
+        SalesOrderStatus.Faturado => Color.Tertiary,
+        SalesOrderStatus.Entregue => Color.Success,
+        _ => Color.Error,
+    };
+
+    private string StatusIcon => Status switch
+    {
+        SalesOrderStatus.Rascunho => Icons.Material.Outlined.EditNote,
+        SalesOrderStatus.Confirmado => Icons.Material.Outlined.CheckCircle,
+        SalesOrderStatus.Faturado => Icons.Material.Outlined.RequestQuote,
+        SalesOrderStatus.Entregue => Icons.Material.Outlined.LocalShipping,
+        _ => Icons.Material.Outlined.Cancel,
+    };
+}

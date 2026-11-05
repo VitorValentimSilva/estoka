@@ -1,0 +1,47 @@
+@using Estoka.Application.Catalog
+@using FV = FluentValidation
+@inject CategoryService Categories
+@inject FV.IValidator<CategoryInput> Validator
+@inject ISnackbar Snackbar
+@inject ILogger<CategoryDialog> Logger
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_input" Validation="Validator.ForMudForm()" ValidationDelay="0">
+            <MudTextField @bind-Value="_input.Name" For="() => _input.Name" Label="Nome" Variant="Variant.Outlined" Required Immediate Class="mb-3" />
+            <MudTextField @bind-Value="_input.Description" For="() => _input.Description" Label="Descrição" Variant="Variant.Outlined" Lines="3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancelar</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">Salvar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public CategoryDto? Category { get; set; }
+
+    private MudForm _form = default!;
+    private CategoryInput _input = new();
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Category is not null) _input = new CategoryInput { Name = Category.Name, Description = Category.Description };
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid) return;
+        _saving = true;
+        var ok = await Snackbar.RunAsync(async () =>
+        {
+            if (Category is not null) await Categories.UpdateAsync(Category.Id, _input);
+            else await Categories.CreateAsync(_input);
+        }, "Categoria salva.", Logger);
+        _saving = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+    }
+}

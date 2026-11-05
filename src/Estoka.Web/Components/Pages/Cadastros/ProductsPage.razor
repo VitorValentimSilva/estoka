@@ -1,0 +1,186 @@
+@page "/produtos"
+@attribute [Authorize(Policy = Policies.ViewCatalog)]
+@using Estoka.Application.Catalog
+@using Estoka.Domain.Catalog
+@inject ProductService Products
+@inject CategoryService Categories
+@inject ICurrentUser User
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject ILogger<ProductsPage> Logger
+
+<PageHeader Title="Produtos" Subtitle="Catálogo, preços e saldo em estoque" Breadcrumbs="_crumbs">
+    <Actions>
+        @if (_canManage)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenEditorAsync(null)">
+                Novo produto
+            </MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+<MudPaper Elevation="0" Class="card">
+    <div class="toolbar">
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged" Placeholder="Buscar por nome ou SKU" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable
+                      DebounceInterval="350" Class="grow" aria-label="Buscar produtos" />
+        <MudSelect T="Guid?" Value="_categoryId" ValueChanged="OnCategoryChanged" Placeholder="Todas as categorias" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Clearable Dense AdornmentIcon="@Icons.Material.Filled.FilterList" aria-label="Filtrar por categoria"
+                   ToStringFunc="@(id => _categories.FirstOrDefault(c => c.Id == id)?.Name ?? string.Empty)">
+            @foreach (var c in _categories)
+            {
+                <MudSelectItem T="Guid?" Value="c.Id">@c.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSwitch T="bool" Value="_belowMinimum" ValueChanged="OnBelowMinimumChanged" Color="Color.Warning" Label="Abaixo do mínimo" />
+    </div>
+
+    <MudDataGrid @ref="_grid" T="ProductListItem" ServerData="LoadAsync" Dense Hover RowsPerPage="25" Elevation="0"
+                 SortMode="SortMode.Single" Class="data-grid" HorizontalScrollbar Breakpoint="Breakpoint.None">
+        <Columns>
+            <PropertyColumn Property="x => x.Sku" Title="SKU" CellClass="mono nowrap" />
+            <PropertyColumn Property="x => x.Name" Title="Produto">
+                <CellTemplate>
+                    <div class="cell-title">@context.Item.Name</div>
+                    <div class="cell-sub">@context.Item.CategoryName@(context.Item.SupplierName is null ? "" : $" · {context.Item.SupplierName}")</div>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.CategoryName" Title="Categoria" Hidden="true" />
+            <PropertyColumn Property="x => x.CurrentStock" Title="Estoque" HeaderClass="text-right" CellClass="text-right nowrap">
+                <CellTemplate>
+                    @if (context.Item.IsBelowMinimum)
+                    {
+                        <MudTooltip Text="@($"Abaixo do mínimo ({context.Item.MinimumStock.Qty()})")">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Icon="@Icons.Material.Filled.WarningAmber">
+                                @context.Item.CurrentStock.Qty() @context.Item.Unit.Abbreviation()
+                            </MudChip>
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <span class="num">@context.Item.CurrentStock.Qty() <span class="muted">@context.Item.Unit.Abbreviation()</span></span>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.SalePrice" Title="Preço" HeaderClass="text-right" CellClass="text-right nowrap num">
+                <CellTemplate>@context.Item.SalePrice.Money()</CellTemplate>
+            </PropertyColumn>
+            @if (_canViewCost)
+            {
+                <PropertyColumn Property="x => x.CostPrice" Title="Custo" HeaderClass="text-right" CellClass="text-right nowrap num">
+                    <CellTemplate><span class="muted">@context.Item.CostPrice.Money()</span></CellTemplate>
+                </PropertyColumn>
+                <PropertyColumn Property="x => x.MarginPercent" Title="Margem" HeaderClass="text-right" CellClass="text-right nowrap">
+                    <CellTemplate><MarginBadge Value="context.Item.MarginPercent ?? 0" /></CellTemplate>
+                </PropertyColumn>
+            }
+            <TemplateColumn Title="" Sortable="false" CellClass="text-right nowrap" HeaderStyle="width: 1%">
+                <CellTemplate>
+                    @if (!context.Item.IsActive)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Inativo</MudChip>
+                    }
+                    <MudTooltip Text="Histórico de movimentações">
+                        <MudIconButton Icon="@Icons.Material.Outlined.History" Size="Size.Small" OnClick="() => OpenHistoryAsync(context.Item)" aria-label="Histórico" />
+                    </MudTooltip>
+                    @if (_canManage)
+                    {
+                        <MudTooltip Text="Editar">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => OpenEditorAsync(context.Item.Id)" aria-label="Editar" />
+                        </MudTooltip>
+                        <MudTooltip Text="Excluir">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context.Item)" aria-label="Excluir" />
+                        </MudTooltip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent>
+            <EmptyState Icon="@Icons.Material.Outlined.Inventory2" Title="Nenhum produto encontrado"
+                        Description="Ajuste a busca ou os filtros para ver outros produtos." />
+        </NoRecordsContent>
+        <LoadingContent><PageLoading Text="Carregando produtos..." /></LoadingContent>
+        <PagerContent>
+            <MudDataGridPager T="ProductListItem" PageSizeOptions="[10, 25, 50, 100]" RowsPerPageString="Por página:" InfoFormat="{first_item}–{last_item} de {all_items}" />
+        </PagerContent>
+    </MudDataGrid>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "abaixoMinimo")] public bool? BelowMinimumQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "categoria")] public Guid? CategoryQuery { get; set; }
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Cadastros", null, disabled: true), new("Produtos", null, disabled: true)];
+    private MudDataGrid<ProductListItem> _grid = default!;
+    private IReadOnlyList<LookupItem> _categories = [];
+    private string? _search;
+    private Guid? _categoryId;
+    private bool _belowMinimum;
+    private bool _canManage;
+    private bool _canViewCost;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canManage = User.Can(Permission.ManageCatalog);
+        _canViewCost = User.Can(Permission.ViewCost);
+        _belowMinimum = BelowMinimumQuery ?? false;
+        _categoryId = CategoryQuery;
+        _categories = await Categories.LookupAsync();
+    }
+
+    private async Task<GridData<ProductListItem>> LoadAsync(GridState<ProductListItem> state, CancellationToken ct)
+    {
+        try
+        {
+            var sort = state.SortDefinitions.FirstOrDefault();
+            var result = await Products.GetPagedAsync(new ProductQuery
+            {
+                Page = state.Page,
+                PageSize = state.PageSize,
+                SortBy = sort?.SortBy,
+                SortDescending = sort?.Descending ?? false,
+                Search = _search,
+                CategoryId = _categoryId,
+                BelowMinimumOnly = _belowMinimum,
+            }, ct);
+            return new GridData<ProductListItem> { Items = result.Items, TotalItems = result.TotalCount };
+        }
+        catch (OperationCanceledException)
+        {
+            return new GridData<ProductListItem> { Items = [], TotalItems = 0 };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Falha ao carregar produtos");
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+            return new GridData<ProductListItem> { Items = [], TotalItems = 0 };
+        }
+    }
+
+    private Task OnSearchChanged(string? value) { _search = value; return _grid.ReloadServerData(); }
+    private Task OnCategoryChanged(Guid? value) { _categoryId = value; return _grid.ReloadServerData(); }
+    private Task OnBelowMinimumChanged(bool value) { _belowMinimum = value; return _grid.ReloadServerData(); }
+
+    private async Task OpenEditorAsync(Guid? id)
+    {
+        var parameters = new DialogParameters<ProductDialog> { { x => x.ProductId, id } };
+        var dialog = await Dialogs.ShowAsync<ProductDialog>(id is null ? "Novo produto" : "Editar produto", parameters, DialogExtensions.FormOptions);
+        if (await dialog.Result is { Canceled: false }) await _grid.ReloadServerData();
+    }
+
+    private async Task OpenHistoryAsync(ProductListItem item)
+    {
+        var parameters = new DialogParameters<ProductHistoryDialog> { { x => x.ProductId, item.Id } };
+        await Dialogs.ShowAsync<ProductHistoryDialog>($"Movimentações — {item.Name}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true });
+    }
+
+    private async Task DeleteAsync(ProductListItem item)
+    {
+        if (await Dialogs.ConfirmAsync("Excluir produto", $"Excluir \"{item.Name}\"? O histórico de vendas e movimentações será mantido.") is null)
+            return;
+        if (await Snackbar.RunAsync(() => Products.DeleteAsync(item.Id), "Produto excluído.", Logger))
+            await _grid.ReloadServerData();
+    }
+}
