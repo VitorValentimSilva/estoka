@@ -4,6 +4,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- PostgreSQL-first: usamos ILIKE e índices trigram nas buscas (decisão documentada no README) -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
