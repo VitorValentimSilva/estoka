@@ -119,6 +119,13 @@ app.UseRequestLocalization("pt-BR");
 app.UseStatusCodePagesWithReExecute("/nao-encontrado", createScopeForStatusCodePages: true);
 app.UseWebSockets();
 app.UseRateLimiter();
+// Liveness sem tocar no banco: usada pelo health check do Render e pelo ping que mantém a demo acordada,
+// para o Postgres serverless (Neon) poder suspender quando ninguém está usando. Fica antes da autenticação
+// para que um cookie de login não dispare a validação do security stamp (que consulta o banco).
+app.UseHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false,
+});
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -134,12 +141,6 @@ app.MapStaticAssets();
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     ResponseWriter = (context, report) => HealthResponseWriter.WriteAsync(context, report, includeErrors: app.Environment.IsDevelopment()),
-}).AllowAnonymous();
-// Liveness sem tocar no banco: usada pelo health check do Render e pelo ping que mantém a demo acordada,
-// para o Postgres serverless (Neon) poder suspender quando ninguém está usando.
-app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = _ => false,
 }).AllowAnonymous();
 app.MapAccountEndpoints();
 app.MapDocumentEndpoints();
