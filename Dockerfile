@@ -17,7 +17,7 @@ COPY src/ src/
 RUN dotnet publish src/Estoka.Web/Estoka.Web.csproj -c Release -o /app/publish /p:UseAppHost=false
 
 # ---------- runtime ----------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 WORKDIR /app
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
