@@ -59,6 +59,8 @@ public class ReportAndAdminTests(EstokaFactory factory)
         report.Days.Count.ShouldBe(30);
         report.IncludesCost.ShouldBeTrue();
         report.Net.ShouldBe(report.Gross - report.Discounts);
+        // Mesma identidade dia a dia (arredondamento por item, como no pedido — sem centavos "sobrando").
+        report.Days.ShouldAllBe(d => d.Net == d.Gross - d.Discounts);
 
         await using var seller = factory.ScopeAs(Roles.Vendedor);
         await Should.ThrowAsync<ForbiddenException>(() =>

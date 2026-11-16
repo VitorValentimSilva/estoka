@@ -31,7 +31,9 @@ public sealed class ReportService(IAppDbContextFactory dbFactory, ICurrentUser u
             {
                 o.OrderDate, o.PaymentMethod, o.Total, o.Discount,
                 ItemDiscounts = o.Items.Sum(i => i.Discount),
-                Gross = o.Items.Sum(i => i.Quantity * i.UnitPrice),
+                // Bruto = soma do bruto de cada item já arredondado (Total + Desconto), a mesma regra do pedido;
+                // arredondar só a soma do dia gerava diferença de centavos contra o líquido.
+                Gross = o.Items.Sum(i => i.Total + i.Discount),
                 Cost = o.Items.Sum(i => i.Quantity * i.UnitCost),
             })
             .ToListAsync(ct);
@@ -41,7 +43,7 @@ public sealed class ReportService(IAppDbContextFactory dbFactory, ICurrentUser u
         for (var d = period.From; d <= period.To; d = d.AddDays(1))
         {
             days.Add(byDay.TryGetValue(d, out var g)
-                ? new SalesReportRow(d, g.Count(), Math.Round(g.Sum(o => o.Gross), 2), g.Sum(o => o.Discount + o.ItemDiscounts),
+                ? new SalesReportRow(d, g.Count(), g.Sum(o => o.Gross), g.Sum(o => o.Discount + o.ItemDiscounts),
                     g.Sum(o => o.Total), includesCost ? Math.Round(g.Sum(o => o.Cost), 2) : 0)
                 : new SalesReportRow(d, 0, 0, 0, 0, 0));
         }
