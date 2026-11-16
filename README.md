@@ -1,6 +1,6 @@
 # Estoka — gestão de estoque e vendas para pequenas empresas
 
-[![CI](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml/badge.svg)](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-5C2D91) ![EF Core](https://img.shields.io/badge/EF%20Core-10-0F766E) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791) ![Tests](https://img.shields.io/badge/testes-103%20%2B%20E2E-16A34A)
+[![CI](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml/badge.svg)](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-5C2D91) ![EF Core](https://img.shields.io/badge/EF%20Core-10-0F766E) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791) ![Tests](https://img.shields.io/badge/testes-122%20%2B%20E2E-16A34A)
 
 **Demo:** (link) · usuários `admin@estoka.app`, `gerente@estoka.app`, `vendedor@estoka.app` — senha `Demo@1234`
 **API:** (link)/scalar · chave de demonstração `estoka-demo-key`
@@ -14,7 +14,8 @@
 - **Stack:** .NET 10, Blazor Web App (Interactive Server) + MudBlazor, EF Core 10 + PostgreSQL, ASP.NET Core Identity, Minimal APIs with native OpenAPI + Scalar, QuestPDF, ClosedXML, Docker.
 - **Architecture:** lean Clean Architecture (Domain / Application / Infrastructure / Web), business rules in the domain, authorization enforced in the services (not only in the UI).
 - **Highlights:** stock can never go negative; confirming an order writes stock movements in one transaction; **optimistic concurrency** with PostgreSQL `xmin` (two users racing for the last unit → only one wins, with a friendly message); automatic **audit trail** (before/after JSON) via an EF Core interceptor; soft delete with global query filters; role-based access (Admin / Manager / Salesperson — salespeople never see cost or margin); daily-reset demo data.
-- **Quality & ops:** 103 unit + integration tests against a real PostgreSQL (WebApplicationFactory) plus a Playwright end-to-end flow, all running in GitHub Actions (with coverage and a vulnerable-package gate). OpenTelemetry traces/metrics (OTLP), rate limiting, CSP/HSTS security headers, a non-root multi-stage Dockerfile, docker-compose and a Render blueprint.
+- **Barcode scanning:** GTIN/EAN-13 per product, USB scanners and phone camera (native BarcodeDetector with a self-hosted ZXing fallback) in sales orders and stock entries — covered by an end-to-end test that feeds a generated EAN-13 video to Chrome as a fake camera.
+- **Quality & ops:** 122 unit + integration tests against a real PostgreSQL (WebApplicationFactory) plus a Playwright end-to-end flow, all running in GitHub Actions (with coverage and a vulnerable-package gate). OpenTelemetry traces/metrics (OTLP), rate limiting, CSP/HSTS security headers, a non-root multi-stage Dockerfile, docker-compose and a Render blueprint.
 
 I build this kind of system for clients — internal tools, dashboards, APIs and integrations in .NET.
 
@@ -63,6 +64,7 @@ A demonstração vem configurada para a empresa fictícia **Distribuidora Bom Pr
 | Clientes — CRUD (CPF/CNPJ validados, máscaras) | ✅ | ✅ | ✅ |
 | Pedidos — criar, confirmar, faturar, entregar, cancelar, PDF | ✅ | ✅ | ✅ (sem alterar preço de tabela) |
 | Desconto acima de 10% do valor bruto | ✅ | ✅ | ❌ |
+| Leitor de código de barras (USB ou câmera) no pedido | ✅ | ✅ | ✅ |
 | Estoque — consultar movimentações | ✅ | ✅ | ✅ |
 | Estoque — registrar entrada e ajuste de inventário | ✅ | ✅ | ❌ |
 | Relatórios (vendas, curva ABC, posição de estoque) + Excel/PDF | ✅ | ✅ | ❌ |
@@ -139,6 +141,8 @@ tests/
 
 **Observabilidade (OpenTelemetry).** Traces de HTTP, das consultas ao PostgreSQL (Npgsql) e dos casos de uso críticos ("Confirmar pedido", "Cancelar pedido"); métricas de ASP.NET Core, runtime e de negócio (`estoka.orders.confirmed`, `estoka.orders.revenue`, `estoka.orders.canceled`, `estoka.stock.movements`, `estoka.concurrency.retries`); logs estruturados. A exportação OTLP liga ao definir `OTEL_EXPORTER_OTLP_ENDPOINT` (Grafana Cloud, Honeycomb, Jaeger ou o Aspire Dashboard local).
 
+**Código de barras.** Cada produto pode ter um GTIN (EAN-13, EAN-8, UPC-A ou GTIN-14) validado pelo dígito verificador GS1 e único no catálogo. Leitores USB funcionam como teclado (digitam e enviam Enter): o campo "Bipar produto" adiciona 1 unidade ao pedido a cada leitura, ou seleciona o produto na entrada/ajuste de estoque. Pelo celular, o botão de câmera usa a `BarcodeDetector` API nativa quando existe e, senão, a ZXing servida localmente (respeita a CSP; funciona no iPhone/Safari). Os códigos da demo usam o prefixo GS1 "20", reservado para uso interno, para não colidir com produtos reais.
+
 **Migrations no startup.** O app aplica migrations ao iniciar (`Database.MigrateAsync`) — prático para a demo e um único container. Num ambiente maior, isso vira um passo do pipeline de deploy (ex.: `dotnet ef migrations bundle`), com aprovação e rollback controlados.
 
 ## Como rodar
@@ -197,6 +201,7 @@ Base `/api/v1`, autenticação por `X-Api-Key`, erros em **ProblemDetails** (RFC
 |---|---|---|
 | GET | `/products?search=&categoryId=&belowMinimum=&page=&pageSize=` | Produtos ativos (sem custo) |
 | GET | `/products/{id}` | Detalhe do produto |
+| GET | `/products/barcode/{code}` | Produto pelo código de barras (404 se não existir, 422 se o dígito verificador for inválido) |
 | GET | `/stock/movements?productId=&type=&from=&to=` | Movimentações de estoque |
 | GET | `/stock/low` | Produtos abaixo do mínimo |
 | GET | `/customers?search=` | Busca de clientes |
@@ -215,18 +220,18 @@ curl -X POST http://localhost:8080/api/v1/orders -H "X-Api-Key: estoka-demo-key"
 dotnet test
 ```
 
-- **Unitários (48):** regras de estoque (nunca negativo, saldo = soma), fluxo de status e totais do pedido, CPF/CNPJ, conversão de connection string URI, agenda do reset, matriz de permissões.
-- **Integração (55, PostgreSQL real):** cada execução cria um banco temporário, aplica migrations e o seed, e o remove no fim. Cobrem: consistência estoque × movimentações, **dois pedidos simultâneos pelo último item**, `xmin`, auditoria e soft delete, **Vendedor tentando ver custo** (serviço e HTTP), login real pelo formulário, usuário desativado, dashboard, PDF, exportações, API (401/400/404/422/201), gestão de usuários, limite de desconto, contas de demo protegidas, rate limiting (429), cabeçalhos de segurança e métricas de negócio. Use `ESTOKA_TEST_PG` para apontar outro servidor.
+- **Unitários (61):** regras de estoque (nunca negativo, saldo = soma), fluxo de status e totais do pedido, CPF/CNPJ, conversão de connection string URI, agenda do reset, matriz de permissões.
+- **Integração (61, PostgreSQL real):** cada execução cria um banco temporário, aplica migrations e o seed, e o remove no fim. Cobrem: consistência estoque × movimentações, **dois pedidos simultâneos pelo último item**, `xmin`, auditoria e soft delete, **Vendedor tentando ver custo** (serviço e HTTP), login real pelo formulário, usuário desativado, dashboard, PDF, exportações, API (401/400/404/422/201), gestão de usuários, limite de desconto, contas de demo protegidas, rate limiting (429), cabeçalhos de segurança, métricas de negócio e código de barras (busca, unicidade, API, preenchimento da demo). Use `ESTOKA_TEST_PG` para apontar outro servidor.
 - **Cobertura** (sem migrations): Domain 88% · Infrastructure 85% · Application 66% · Web 24% (as telas Blazor rodam via SignalR e são cobertas pelo E2E). O CI publica o relatório Cobertura como artefato.
 - **CI (GitHub Actions):** build com warnings como erro, testes com PostgreSQL em container, verificação de pacotes vulneráveis e E2E contra a imagem Docker.
-- **E2E (Playwright):** Vendedor faz login → cria pedido → confirma → confere a baixa de estoque.
+- **E2E (Playwright):** Vendedor faz login → cria pedido → confirma → confere a baixa de estoque; e um segundo fluxo que bipa um produto (leitor USB) e lê outro pela **câmera** — o Chrome recebe como câmera falsa um vídeo `.y4m` com o EAN-13 gerado pelo próprio teste (`tests/e2e/ean13-video.cjs`).
 
 ```bash
 cd tests/e2e && npm ci && npx playwright install chromium
 ```
 
 ```bash
-BASE_URL=http://localhost:8080 node tests/e2e/pedido-vendedor.cjs
+BASE_URL=http://localhost:8080 npm run e2e --prefix tests/e2e
 ```
 
 ## Deploy no Render + Neon

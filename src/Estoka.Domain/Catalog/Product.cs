@@ -7,6 +7,7 @@ public sealed class Product : SoftDeletableEntity
 {
     public const int SkuMaxLength = 30;
     public const int NameMaxLength = 150;
+    public const int BarcodeMaxLength = 14;
 
     private Product() { Sku = string.Empty; Name = string.Empty; }
 
@@ -35,6 +36,9 @@ public sealed class Product : SoftDeletableEntity
     public bool IsActive { get; private set; }
     public string? ImageUrl { get; private set; }
 
+    /// <summary>Código de barras GTIN (EAN-13, EAN-8, UPC-A ou GTIN-14), só dígitos. Opcional e único.</summary>
+    public string? Barcode { get; private set; }
+
     /// <summary>Token de concorrência otimista (coluna de sistema <c>xmin</c> do PostgreSQL).</summary>
     public uint Version { get; private set; }
 
@@ -59,6 +63,14 @@ public sealed class Product : SoftDeletableEntity
         MinimumStock = Guard.NotNegative(minimumStock, "Estoque mínimo");
         IsActive = isActive;
         ImageUrl = Guard.Optional(imageUrl, "URL da imagem", 500);
+    }
+
+    public void SetBarcode(string? barcode)
+    {
+        var normalized = Gtin.Normalize(barcode);
+        if (normalized is not null && !Gtin.IsValid(normalized))
+            throw new DomainException("Código de barras inválido (EAN-13, EAN-8, UPC-A ou GTIN-14 com dígito verificador).");
+        Barcode = normalized;
     }
 
     public void Deactivate() => IsActive = false;

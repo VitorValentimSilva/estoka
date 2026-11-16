@@ -36,6 +36,31 @@ public sealed class DemoDataSeeder(IDbContextFactory<AppDbContext> factory, Time
         return true;
     }
 
+    /// <summary>
+    /// Bases criadas antes do código de barras: preenche o EAN dos produtos de demonstração (SKU "MER-002" etc.)
+    /// que ainda não têm, sem esperar o reset diário. Idempotente.
+    /// </summary>
+    public async Task<int> BackfillDemoBarcodesAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.SuppressAudit = true;
+        var prefixes = DemoCatalog.Categories.Select((c, i) => (c.Prefix, Index: i + 1)).ToDictionary(x => x.Prefix, x => x.Index);
+        var pending = await db.Products.IgnoreQueryFilters().Where(p => p.Barcode == null).ToListAsync(ct);
+        var updated = 0;
+        foreach (var product in pending)
+        {
+            var parts = product.Sku.Split('-');
+            if (parts.Length != 2 || !prefixes.TryGetValue(parts[0], out var categoryIndex)
+                || !int.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var number)) continue;
+            var barcode = DemoBarcode(categoryIndex, number);
+            if (await db.Products.IgnoreQueryFilters().AnyAsync(p => p.Barcode == barcode, ct)) continue;
+            product.SetBarcode(barcode);
+            updated++;
+        }
+        if (updated > 0) await db.SaveChangesAsync(ct);
+        return updated;
+    }
+
     /// <summary>Apaga todos os dados de negócio e gera novamente, numa única transação (usuários são mantidos).</summary>
     public async Task ResetAsync(CancellationToken ct = default)
     {
@@ -79,8 +104,10 @@ public sealed class DemoDataSeeder(IDbContextFactory<AppDbContext> factory, Time
 
         // Categorias e produtos
         var products = new List<Product>();
+        var categoryIndex = 0;
         foreach (var c in DemoCatalog.Categories)
         {
+            categoryIndex++;
             var category = new Category(c.Name, c.Description) { CreatedAt = At(setupDay, 9.5) };
             db.Categories.Add(category);
             var n = 1;
@@ -92,6 +119,7 @@ public sealed class DemoDataSeeder(IDbContextFactory<AppDbContext> factory, Time
                 var supplier = rnd.NextDouble() < 0.8 ? suppliers[c.SupplierIndex] : suppliers[8 + rnd.Next(2)];
                 var product = new Product($"{c.Prefix}-{n++:000}", p.Name, null, category.Id, supplier.Id,
                     p.Cost, sale, p.Unit, minimum) { CreatedAt = At(setupDay, 10) };
+                product.SetBarcode(DemoBarcode(categoryIndex, n - 1));
                 products.Add(product);
             }
         }
@@ -324,6 +352,16 @@ public sealed class DemoDataSeeder(IDbContextFactory<AppDbContext> factory, Time
         var (city, districts) = DemoCatalog.Cities[rnd.NextDouble() < 0.55 ? 0 : rnd.Next(1, DemoCatalog.Cities.Length)];
         return new Address($"13{rnd.Next(0, 999999):000000}", Pick(rnd, DemoCatalog.Streets), rnd.Next(10, 3500).ToString(System.Globalization.CultureInfo.InvariantCulture),
             rnd.NextDouble() < 0.2 ? $"Sala {rnd.Next(1, 40)}" : null, Pick(rnd, districts), city, "SP");
+    }
+
+    /// <summary>
+    /// EAN-13 fictício e determinístico: prefixo GS1 "20" (faixa reservada para uso interno/loja, sem colisão
+    /// com produtos reais) + "4512" + categoria (2 dígitos) + item (4 dígitos) + dígito verificador.
+    /// </summary>
+    public static string DemoBarcode(int categoryIndex, int itemNumber)
+    {
+        var body = $"204512{categoryIndex:00}{itemNumber:0000}";
+        return body + Gtin.CheckDigit(body);
     }
 
     public static string GenerateCpf(Random rnd)

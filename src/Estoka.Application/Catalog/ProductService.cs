@@ -22,7 +22,8 @@ public sealed class ProductService(
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var like = Text.Like(query.Search);
-            q = q.Where(p => EF.Functions.ILike(p.Name, like) || EF.Functions.ILike(p.Sku, like));
+            var barcode = Gtin.Normalize(query.Search);
+            q = q.Where(p => EF.Functions.ILike(p.Name, like) || EF.Functions.ILike(p.Sku, like) || (barcode != null && p.Barcode == barcode));
         }
         if (query.CategoryId is { } categoryId) q = q.Where(p => p.CategoryId == categoryId);
         if (query.BelowMinimumOnly) q = q.Where(p => p.CurrentStock < p.MinimumStock);
@@ -37,7 +38,7 @@ public sealed class ProductService(
                 p.SalePrice,
                 canViewCost ? p.CostPrice : null,
                 canViewCost ? (p.SalePrice == 0 ? 0 : Math.Round((p.SalePrice - p.CostPrice) / p.SalePrice * 100, 2)) : null,
-                p.Unit, p.CurrentStock, p.MinimumStock, p.IsActive))
+                p.Unit, p.CurrentStock, p.MinimumStock, p.IsActive, p.Barcode))
             .ToListAsync(ct);
         return new PagedResult<ProductListItem>(items, total);
     }
@@ -71,7 +72,7 @@ public sealed class ProductService(
         return new ProductDetails(p.Id, p.Sku, p.Name, p.Description, p.CategoryId, p.Category!.Name,
             p.SupplierId, p.Supplier?.DisplayName, p.SalePrice,
             canViewCost ? p.CostPrice : null, canViewCost ? p.MarginPercent : null,
-            p.Unit, p.CurrentStock, p.MinimumStock, p.IsActive, p.ImageUrl, p.CreatedAt, p.UpdatedAt, p.UpdatedBy);
+            p.Unit, p.CurrentStock, p.MinimumStock, p.IsActive, p.ImageUrl, p.CreatedAt, p.UpdatedAt, p.UpdatedBy, p.Barcode);
     }
 
     /// <summary>Custo e margem — exclusivo de quem tem <c>ViewCost</c>. Lança <see cref="ForbiddenException"/> para Vendedor.</summary>
@@ -90,6 +91,23 @@ public sealed class ProductService(
     public Task<IReadOnlyList<ProductPick>> SearchForStockAsync(string? term, int take = 15, CancellationToken ct = default)
         => SearchAsync(term, take, includeInactive: true, ct);
 
+    /// <summary>
+    /// Localiza um produto pelo código de barras lido (leitor USB, câmera ou digitado). Retorna null se não existir.
+    /// Código com dígito verificador inválido gera <see cref="DomainException"/> (leitura com erro).
+    /// </summary>
+    public async Task<ProductPick?> FindByBarcodeAsync(string? code, bool includeInactive = false, CancellationToken ct = default)
+    {
+        user.Demand(Permission.ViewCatalog);
+        var barcode = Gtin.Normalize(code);
+        if (barcode is null) return null;
+        if (!Gtin.IsValid(barcode)) throw new DomainException($"Código de barras \"{barcode}\" inválido — verifique a leitura.");
+        await using var db = await dbFactory.CreateAsync(ct);
+        return await db.Products.AsNoTracking()
+            .Where(p => p.Barcode == barcode && (includeInactive || p.IsActive))
+            .Select(p => new ProductPick(p.Id, p.Sku, p.Name, p.SalePrice, p.CurrentStock, p.Unit, p.IsActive))
+            .FirstOrDefaultAsync(ct);
+    }
+
     private async Task<IReadOnlyList<ProductPick>> SearchAsync(string? term, int take, bool includeInactive, CancellationToken ct)
     {
         user.Demand(Permission.ViewCatalog);
@@ -98,7 +116,8 @@ public sealed class ProductService(
         if (!string.IsNullOrWhiteSpace(term))
         {
             var like = Text.Like(term);
-            q = q.Where(p => EF.Functions.ILike(p.Name, like) || EF.Functions.ILike(p.Sku, like));
+            var barcode = Gtin.Normalize(term);
+            q = q.Where(p => EF.Functions.ILike(p.Name, like) || EF.Functions.ILike(p.Sku, like) || (barcode != null && p.Barcode == barcode));
         }
         return await q.OrderBy(p => p.Name).Take(take)
             .Select(p => new ProductPick(p.Id, p.Sku, p.Name, p.SalePrice, p.CurrentStock, p.Unit, p.IsActive))
@@ -115,6 +134,7 @@ public sealed class ProductService(
         var product = new Product(input.Sku, input.Name, input.Description, input.CategoryId, input.SupplierId,
             input.CostPrice, input.SalePrice, input.Unit, input.MinimumStock, input.ImageUrl);
         if (!input.IsActive) product.Deactivate();
+        product.SetBarcode(input.Barcode);
         db.Products.Add(product);
 
         if (input.InitialStock > 0)
@@ -137,6 +157,7 @@ public sealed class ProductService(
         var cost = user.Can(Permission.ViewCost) ? input.CostPrice : product.CostPrice;
         product.Update(input.Sku, input.Name, input.Description, input.CategoryId, input.SupplierId,
             cost, input.SalePrice, input.Unit, input.MinimumStock, input.IsActive, input.ImageUrl);
+        product.SetBarcode(input.Barcode);
         await db.SaveChangesAsync(ct);
     }
 
@@ -154,6 +175,9 @@ public sealed class ProductService(
         var sku = input.Sku.Trim().ToUpperInvariant();
         if (await db.Products.AnyAsync(p => p.Sku == sku && p.Id != id, ct))
             throw new DomainException($"Já existe um produto com o SKU \"{sku}\".");
+        if (Gtin.Normalize(input.Barcode) is { } barcode
+            && await db.Products.Where(p => p.Barcode == barcode && p.Id != id).Select(p => p.Name).FirstOrDefaultAsync(ct) is { } other)
+            throw new DomainException($"O código de barras {barcode} já pertence a \"{other}\".");
         if (!await db.Categories.AnyAsync(c => c.Id == input.CategoryId, ct))
             throw new DomainException("Categoria não encontrada.");
         if (input.SupplierId is { } supplierId && supplierId != Guid.Empty && !await db.Suppliers.AnyAsync(s => s.Id == supplierId, ct))

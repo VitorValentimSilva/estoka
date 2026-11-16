@@ -97,6 +97,10 @@ jobs:
         run: node tests/e2e/pedido-vendedor.cjs
         env:
           BASE_URL: http://localhost:8080
+      - name: Leitor de código de barras (bipe USB e câmera com vídeo falso)
+        run: node tests/e2e/codigo-de-barras.cjs
+        env:
+          BASE_URL: http://localhost:8080
       - name: Logs do container
         if: failure()
         run: docker logs estoka

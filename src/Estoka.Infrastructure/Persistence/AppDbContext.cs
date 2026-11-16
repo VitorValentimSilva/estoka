@@ -85,6 +85,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     private static string UniqueViolationMessage(string? constraint) => constraint switch
     {
         { } c when c.Contains("sku", StringComparison.Ordinal) => "Já existe um produto com este SKU.",
+        { } c when c.Contains("barcode", StringComparison.Ordinal) => "Já existe um produto com este código de barras.",
         { } c when c.Contains("document", StringComparison.Ordinal) => "Já existe um cliente com este documento.",
         { } c when c.Contains("cnpj", StringComparison.Ordinal) => "Já existe um fornecedor com este CNPJ.",
         { } c when c.Contains("name", StringComparison.Ordinal) => "Já existe um registro com este nome.",

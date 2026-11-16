@@ -12,6 +12,9 @@
     <DialogContent>
         <MudGrid Spacing="2">
             <MudItem xs="12">
+                <BarcodeField OnScanned="SelectByBarcodeAsync" Label="Bipar produto" HelperText="Leitor USB, câmera ou digitação — seleciona o produto abaixo" />
+            </MudItem>
+            <MudItem xs="12">
                 <MudAutocomplete T="ProductPick" Value="_product" ValueChanged="OnProductChanged" SearchFunc="SearchAsync" Label="Produto"
                                  Variant="Variant.Outlined" ToStringFunc="@(p => p is null ? string.Empty : $"{p.Sku} — {p.Name}")"
                                  DebounceInterval="250" ResetValueOnEmptyText Clearable Required RequiredError="Selecione o produto."
@@ -118,6 +121,25 @@
 
     private async Task<IEnumerable<ProductPick>> SearchAsync(string? term, CancellationToken ct)
         => await Products.SearchForStockAsync(term, 20, ct);
+
+    private async Task SelectByBarcodeAsync(string code)
+    {
+        try
+        {
+            var product = await Products.FindByBarcodeAsync(code, includeInactive: true);
+            if (product is null)
+            {
+                Snackbar.Add($"Nenhum produto com o código {code}.", Severity.Warning);
+                return;
+            }
+            OnProductChanged(product);
+            if (Type == StockMovementType.Entrada && _entry.Quantity <= 0) _entry.Quantity = 1;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ErrorMessages.Friendly(ex), Severity.Error);
+        }
+    }
 
     private void OnProductChanged(ProductPick? product)
     {

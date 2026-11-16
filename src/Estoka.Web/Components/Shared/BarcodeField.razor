@@ -1,0 +1,40 @@
+@* Campo de leitura: leitor USB (funciona como teclado e envia Enter), câmera ou digitação. *@
+@inject IDialogService Dialogs
+
+<MudTextField T="string" @ref="_field" @bind-Value="_value" Label="@Label" Placeholder="@Placeholder" Variant="Variant.Outlined"
+              Margin="@Margin" Immediate OnKeyDown="OnKeyDownAsync" Class="@Class" InputMode="InputMode.numeric" autocomplete="off"
+              Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.PhotoCamera" OnAdornmentClick="OpenCameraAsync"
+              AdornmentAriaLabel="Ler com a câmera" HelperText="@HelperText" aria-label="@Label" data-testid="barcode-field" />
+
+@code {
+    [Parameter] public string Label { get; set; } = "Código de barras";
+    [Parameter] public string? Placeholder { get; set; } = "Bipe, digite ou use a câmera";
+    [Parameter] public string? HelperText { get; set; }
+    [Parameter] public Margin Margin { get; set; } = Margin.Dense;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback<string> OnScanned { get; set; }
+
+    private MudTextField<string> _field = default!;
+    private string? _value;
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await SubmitAsync(_value);
+    }
+
+    private async Task OpenCameraAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<BarcodeScannerDialog>("Ler código de barras",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        if (await dialog.Result is { Canceled: false, Data: string code }) await SubmitAsync(code);
+    }
+
+    private async Task SubmitAsync(string? code)
+    {
+        var trimmed = code?.Trim();
+        _value = null;
+        await _field.ClearAsync();
+        if (!string.IsNullOrEmpty(trimmed)) await OnScanned.InvokeAsync(trimmed);
+        await _field.FocusAsync(); // pronto para o próximo bip
+    }
+}

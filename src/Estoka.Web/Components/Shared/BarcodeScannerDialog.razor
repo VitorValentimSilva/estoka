@@ -1,0 +1,71 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <div class="scanner">
+            <video @ref="_video" class="scanner__video" muted playsinline autoplay></video>
+            <div class="scanner__frame" aria-hidden="true"></div>
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3" Dense>@_error</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="muted mt-3 text-center">
+                Aponte a câmera para o código de barras. @(_engine is null ? "Iniciando câmera..." : "")
+            </MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Fechar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private ElementReference _video;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<BarcodeScannerDialog>? _ref;
+    private string? _engine;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _ref = DotNetObjectReference.Create(this);
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/barcode.js");
+        var result = await _module.InvokeAsync<StartResult>("start", _video, _ref);
+        _engine = result.Engine;
+        _error = result.Ok ? null : result.Error;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task OnDetected(string code)
+    {
+        Dialog.Close(DialogResult.Ok(code));
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("stop");
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // circuito encerrado: o navegador já liberou a câmera
+        }
+        _ref?.Dispose();
+    }
+
+    private sealed record StartResult(bool Ok, string? Engine, string? Error);
+}

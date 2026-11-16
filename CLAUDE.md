@@ -14,7 +14,8 @@ dotnet test --project tests/Estoka.IntegrationTests --filter-method "*Concorr*"
 dotnet run --project src/Estoka.Web    # http://localhost:5016 (Development)
 dotnet ef migrations add Nome -p src/Estoka.Infrastructure -s src/Estoka.Web -o Persistence/Migrations
 cd tests/e2e && npm ci                                                   # Playwright do E2E (CI instala o chromium)
-BASE_URL=http://localhost:8080 node tests/e2e/pedido-vendedor.cjs      # E2E
+BASE_URL=http://localhost:8080 node tests/e2e/pedido-vendedor.cjs      # E2E do pedido
+BASE_URL=http://localhost:8080 node tests/e2e/codigo-de-barras.cjs     # E2E do leitor (câmera falsa com vídeo .y4m)
 dotnet test --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
 BASE_URL=... ORDER_ID=<guid> node tests/e2e/screenshots.cjs            # regenera docs/screenshots
 ```
@@ -40,6 +41,7 @@ BASE_URL=... ORDER_ID=<guid> node tests/e2e/screenshots.cjs            # regener
 - Telemetria: use `EstokaTelemetry.Source`/contadores (System.Diagnostics) na Application; o OpenTelemetry é configurado só na Web (`TelemetrySetup`).
 - Segurança na Web: `SecuritySetup` (rate limiting por IP em `/login` POST e `/api`, CSP e demais cabeçalhos). Ao adicionar CDN/scripts externos, atualize a CSP.
 - Demo: contas de `DemoUsers` são protegidas no `UserAdminService`; o reset (`DemoResetBackgroundService`) roda no horário ou ao iniciar se estiver atrasado (`system_settings`).
+- Código de barras: `Gtin` (Domain) valida/normaliza; `Product.SetBarcode`; busca por `ProductService.FindByBarcodeAsync`. UI reutiliza `BarcodeField` (USB/digitação + câmera) e `BarcodeScannerDialog` (`wwwroot/js/barcode.js`: BarcodeDetector nativo, fallback ZXing em `wwwroot/lib/zxing`). Códigos da demo: `DemoDataSeeder.DemoBarcode` (prefixo "20").
 - Commits pequenos, mensagens em português. Atualize `docs/PROGRESSO.md`.
 
 ## Pegadinhas conhecidas
@@ -52,6 +54,7 @@ BASE_URL=... ORDER_ID=<guid> node tests/e2e/screenshots.cjs            # regener
 - Não rode `pkill -f Estoka.Web` (casa com o próprio shell); mate pelo PID.
 - `IdentitySeeder.EnsureDemoUsersAsync` só redefine senha se necessário — trocar o security stamp derruba sessões.
 - Testes de integração fazem muitos logins: a `EstokaFactory` sobe os limites de rate limiting; o 429 é testado em `LowRateLimitFactory` (banco próprio).
+- E2E com autocomplete do MudBlazor: espere o popover fechar (`.mud-popover-open` detached) antes de digitar no próximo campo.
 - Rodar em `Production` a partir de `bin/Debug` não serve os assets estáticos fingerprinted — use `Development` ou a imagem publicada.
 
 ## Testes

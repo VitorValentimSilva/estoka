@@ -33,6 +33,8 @@ public static class DatabaseInitializer
             await identity.EnsureDemoUsersAsync(demo.Password);
             var seeded = await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedIfEmptyAsync(ct);
             if (seeded) logger.LogInformation("Banco vazio: dados de demonstração criados");
+            else if (await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().BackfillDemoBarcodesAsync(ct) is > 0 and var filled)
+                logger.LogInformation("Códigos de barras preenchidos em {Count} produto(s) de demonstração", filled);
         }
     }
 }
