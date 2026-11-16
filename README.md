@@ -236,7 +236,7 @@ BASE_URL=http://localhost:8080 npm run e2e --prefix tests/e2e
 
 ## Deploy no Render + Neon
 
-1. **Banco (Neon):** crie um projeto em [neon.tech](https://neon.tech) (região `sa-east-1` se disponível) e copie a *connection string* (`postgresql://...@...neon.tech/neondb?sslmode=require`). O formato URI é aceito diretamente.
+1. **Banco (Neon):** crie um projeto em [neon.tech](https://neon.tech) (região **AWS US East 1 (N. Virginia)**, a mesma do Render, para o banco ficar perto do app) e copie a *connection string* (`postgresql://...@...neon.tech/neondb?sslmode=require`). O formato URI é aceito diretamente.
 2. **Render:** faça fork/push deste repositório no GitHub. No [Render](https://render.com), escolha **New → Blueprint** e selecione o repositório — o `render.yaml` cria o serviço Docker com health check em `/health`.
    - Alternativa manual: **New → Web Service → Docker**, health check path `/health`.
 3. **Variáveis:** em *Environment*, preencha `ConnectionStrings__Default` com a string do Neon. O blueprint usa a chave pública de demo `estoka-demo-key` (papel limitado, sem custos); num uso real troque por `generateValue: true` e `Api__ShowKeyInDocs=false`. Mantenha `Demo__Enabled=true` para a demonstração.

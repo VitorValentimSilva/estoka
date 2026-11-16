@@ -5,7 +5,7 @@ services:
     name: estoka
     runtime: docker
     plan: free
-    region: oregon
+    region: virginia         # mais perto do Brasil entre as regiões grátis (Blazor Server depende da latência)
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     autoDeploy: true
