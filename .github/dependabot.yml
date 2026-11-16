@@ -9,6 +9,14 @@ updates:
         patterns: ["Microsoft.*", "System.*", "Npgsql*", "EFCore.*"]
       opentelemetry:
         patterns: ["OpenTelemetry*"]
+    ignore:
+      # O projeto segue o .NET 10 (LTS): majors da Microsoft/EF Core/Npgsql vêm junto com a troca de TargetFramework.
+      - dependency-name: "Microsoft.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Npgsql*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "EFCore.*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
