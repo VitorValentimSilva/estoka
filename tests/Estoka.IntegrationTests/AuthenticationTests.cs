@@ -74,4 +74,14 @@ public class AuthenticationTests(EstokaFactory factory)
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldContain("\"database\":{\"status\":\"Healthy\"");
     }
+
+    [Fact]
+    public async Task Liveness_responde_sem_consultar_o_banco()
+    {
+        using var client = factory.CreateBrowserClient();
+        var response = await client.GetAsync("/health/live", TestContext.Current.CancellationToken);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldNotContain("database");
+    }
 }
