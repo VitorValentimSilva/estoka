@@ -35,8 +35,8 @@ jobs:
     env:
       ESTOKA_TEST_PG: Host=localhost;Username=estoka;Password=estoka;Database=postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Restore
@@ -51,7 +51,7 @@ jobs:
           if grep -q "has the following vulnerable packages" vulnerable.txt; then exit 1; fi
       - name: Publicar cobertura
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: "**/TestResults/**/coverage.cobertura.xml"
@@ -73,7 +73,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U estoka" --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build da imagem
         run: docker build -t estoka:ci .
       - name: Sobe o container (usuário não-root, PORT, URI de conexão)
@@ -85,7 +85,7 @@ jobs:
             estoka:ci
           for i in $(seq 1 60); do curl -fs http://localhost:8080/health && break; sleep 2; done
           curl -fs http://localhost:8080/health
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Instala Playwright

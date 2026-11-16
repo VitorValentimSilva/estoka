@@ -73,6 +73,10 @@ Legenda: ✅ feito · 🚧 em andamento · ⏳ pendente
 - ✅ Seed com EAN-13 fictícios (prefixo GS1 "20") e preenchimento automático em bases já existentes
 - ✅ 122 testes (61 + 61) e E2E da câmera com vídeo falso gerado pelo teste, também no CI
 
+## Manutenção — dependências ✅
+- ✅ Atualizações do Dependabot consolidadas: EF Core/ASP.NET Core 10.0.15, OpenTelemetry 1.21.0, Scalar 2.20.0, xunit.v3 4.0.3, actions (checkout/setup-node/upload-artifact v7, setup-dotnet v6)
+- ✅ Dependabot ignora majors de Microsoft/EF/Npgsql (projeto fica no .NET 10 LTS)
+
 ## Falta / próximos passos (v2)
 - NF-e em homologação (Focus NFe) + provedor simulado na demo
 - Multiempresa (tenant) — cobrança/assinatura fora do escopo do portfólio
