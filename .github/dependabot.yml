@@ -25,6 +25,10 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # Imagens acompanham o TargetFramework (net10.0); o .NET 11 é uma migração à parte.
+      - dependency-name: "dotnet/*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /tests/e2e
     schedule:
