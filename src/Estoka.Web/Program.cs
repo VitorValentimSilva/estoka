@@ -119,6 +119,13 @@ app.UseRequestLocalization("pt-BR");
 app.UseStatusCodePagesWithReExecute("/nao-encontrado", createScopeForStatusCodePages: true);
 app.UseWebSockets();
 app.UseRateLimiter();
+// Liveness sem tocar no banco: usada pelo health check do Render e pelo ping que mantém a demo acordada,
+// para o Postgres serverless (Neon) poder suspender quando ninguém está usando. Fica antes da autenticação
+// para que um cookie de login não dispare a validação do security stamp (que consulta o banco).
+app.UseHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false,
+});
 app.UseAuthentication();
 app.UseAuthorization();
 

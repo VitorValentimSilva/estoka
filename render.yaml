@@ -1,13 +1,13 @@
 # Blueprint do Render (https://render.com/docs/blueprint-spec)
-# O banco fica no Neon (PostgreSQL serverless): cole a connection string em ConnectionStrings__Default.
+# O banco fica no Neon (PostgreSQL serverless, região AWS us-east-1): cole a connection string em ConnectionStrings__Default.
 services:
   - type: web
     name: estoka
     runtime: docker
     plan: free
-    region: virginia         # mais perto do Brasil; crie o banco do Neon em AWS US East 1 (N. Virginia)
+    region: virginia           # região do Render mais próxima do Brasil; crie o Neon em AWS us-east-1 (N. Virginia)
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /health
+    healthCheckPath: /health/live   # não consulta o banco: deixa o Neon suspender quando não há uso
     autoDeploy: true
     envVars:
       - key: ConnectionStrings__Default
