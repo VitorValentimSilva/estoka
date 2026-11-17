@@ -157,7 +157,7 @@ Acesse http://localhost:8080 e entre com um dos usuários de demonstração. A A
 
 ### `dotnet run` (desenvolvimento)
 
-Pré-requisitos: .NET 10 SDK e PostgreSQL 16 com um usuário/banco `estoka` (senha `estoka`), ou ajuste `ConnectionStrings:Default`.
+Pré-requisitos: .NET 10 SDK e PostgreSQL 16+ (o CI usa o 18) com um usuário/banco `estoka` (senha `estoka`), ou ajuste `ConnectionStrings:Default`.
 
 ```bash
 dotnet tool restore
@@ -236,8 +236,8 @@ BASE_URL=http://localhost:8080 npm run e2e --prefix tests/e2e
 
 ## Deploy no Render + Neon
 
-1. **Banco (Neon):** crie um projeto em [neon.tech](https://neon.tech) na região **AWS US East 1 (N. Virginia)** — a mesma do serviço no Render (`virginia`), para cada consulta não atravessar o continente — e copie a *connection string* (`postgresql://...@...neon.tech/neondb?sslmode=require`). O formato URI é aceito diretamente.
-2. **Render:** faça fork/push deste repositório no GitHub. No [Render](https://render.com), escolha **New → Blueprint** e selecione o repositório — o `render.yaml` cria o serviço Docker com health check em `/health`.
+1. **Banco (Neon):** crie um projeto em [neon.tech](https://neon.tech) com **Postgres 18** na região **AWS US East 1 (N. Virginia)** — a mesma do serviço no Render (`virginia`), para cada consulta não atravessar o continente. Em *Connect*, **desligue *Connection pooling*** (as migrations do primeiro boot usam lock de sessão) e copie a *connection string* (`postgresql://...@...neon.tech/neondb?sslmode=require`). O formato URI é aceito diretamente.
+2. **Render:** faça fork/push deste repositório no GitHub. No [Render](https://render.com), escolha **New → Blueprint** e selecione o repositório — o `render.yaml` cria o serviço Docker com health check em `/health/live`.
    - Alternativa manual: **New → Web Service → Docker**, região Virginia, health check path `/health/live`.
 3. **Variáveis:** em *Environment*, preencha `ConnectionStrings__Default` com a string do Neon. O blueprint usa a chave pública de demo `estoka-demo-key` (papel limitado, sem custos); num uso real troque por `generateValue: true` e `Api__ShowKeyInDocs=false`. Mantenha `Demo__Enabled=true` para a demonstração.
 4. **Deploy:** o primeiro boot aplica as migrations e gera os dados de demonstração (alguns segundos). Acesse a URL do Render e faça login com os usuários de demo.
