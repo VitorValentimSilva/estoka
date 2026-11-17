@@ -5,7 +5,7 @@ services:
     name: estoka
     runtime: docker
     plan: free
-    region: oregon
+    region: virginia         # mais perto do Brasil; crie o banco do Neon em AWS US East 1 (N. Virginia)
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     autoDeploy: true

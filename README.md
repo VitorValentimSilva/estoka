@@ -157,7 +157,7 @@ Acesse http://localhost:8080 e entre com um dos usuários de demonstração. A A
 
 ### `dotnet run` (desenvolvimento)
 
-Pré-requisitos: .NET 10 SDK e PostgreSQL 16 com um usuário/banco `estoka` (senha `estoka`), ou ajuste `ConnectionStrings:Default`.
+Pré-requisitos: .NET 10 SDK e PostgreSQL 16+ (o CI usa o 18) com um usuário/banco `estoka` (senha `estoka`), ou ajuste `ConnectionStrings:Default`.
 
 ```bash
 dotnet tool restore
@@ -236,7 +236,7 @@ BASE_URL=http://localhost:8080 npm run e2e --prefix tests/e2e
 
 ## Deploy no Render + Neon
 
-1. **Banco (Neon):** crie um projeto em [neon.tech](https://neon.tech) (região `sa-east-1` se disponível) e copie a *connection string* (`postgresql://...@...neon.tech/neondb?sslmode=require`). O formato URI é aceito diretamente.
+1. **Banco (Neon):** crie um projeto em [neon.tech](https://neon.tech) com **Postgres 18** e região **AWS US East 1 (N. Virginia)**, a mesma do serviço no Render (`region: virginia` no `render.yaml`) — o Blazor Server faz várias consultas por clique, então app e banco precisam ficar juntos. Em *Connect*, **desligue *Connection pooling*** (as migrations do primeiro boot usam lock de sessão) e copie a *connection string* (`postgresql://...@...neon.tech/neondb?sslmode=require`). O formato URI é aceito diretamente.
 2. **Render:** faça fork/push deste repositório no GitHub. No [Render](https://render.com), escolha **New → Blueprint** e selecione o repositório — o `render.yaml` cria o serviço Docker com health check em `/health`.
    - Alternativa manual: **New → Web Service → Docker**, health check path `/health`.
 3. **Variáveis:** em *Environment*, preencha `ConnectionStrings__Default` com a string do Neon. O blueprint usa a chave pública de demo `estoka-demo-key` (papel limitado, sem custos); num uso real troque por `generateValue: true` e `Api__ShowKeyInDocs=false`. Mantenha `Demo__Enabled=true` para a demonstração.
