@@ -1,9 +1,9 @@
 # Estoka — gestão de estoque e vendas para pequenas empresas
 
-[![CI](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml/badge.svg)](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-5C2D91) ![EF Core](https://img.shields.io/badge/EF%20Core-10-0F766E) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791) ![Tests](https://img.shields.io/badge/testes-122%20%2B%20E2E-16A34A)
+[![CI](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml/badge.svg)](https://github.com/VitorValentimSilva/estoka/actions/workflows/ci.yml) ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4) ![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-5C2D91) ![EF Core](https://img.shields.io/badge/EF%20Core-10-0F766E) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-336791) ![Tests](https://img.shields.io/badge/testes-123%20%2B%20E2E-16A34A)
 
-**Demo:** (link) · usuários `admin@estoka.app`, `gerente@estoka.app`, `vendedor@estoka.app` — senha `Demo@1234`
-**API:** (link)/scalar · chave de demonstração `estoka-demo-key`
+**Demo:** https://estoka-bbzi.onrender.com · usuários `admin@estoka.app`, `gerente@estoka.app`, `vendedor@estoka.app` — senha `Demo@1234` (plano gratuito: o primeiro acesso após inatividade pode levar ~50 s)
+**API:** https://estoka-bbzi.onrender.com/scalar · chave de demonstração `estoka-demo-key`
 
 ---
 
@@ -15,7 +15,7 @@
 - **Architecture:** lean Clean Architecture (Domain / Application / Infrastructure / Web), business rules in the domain, authorization enforced in the services (not only in the UI).
 - **Highlights:** stock can never go negative; confirming an order writes stock movements in one transaction; **optimistic concurrency** with PostgreSQL `xmin` (two users racing for the last unit → only one wins, with a friendly message); automatic **audit trail** (before/after JSON) via an EF Core interceptor; soft delete with global query filters; role-based access (Admin / Manager / Salesperson — salespeople never see cost or margin); daily-reset demo data.
 - **Barcode scanning:** GTIN/EAN-13 per product, USB scanners and phone camera (native BarcodeDetector with a self-hosted ZXing fallback) in sales orders and stock entries — covered by an end-to-end test that feeds a generated EAN-13 video to Chrome as a fake camera.
-- **Quality & ops:** 122 unit + integration tests against a real PostgreSQL (WebApplicationFactory) plus a Playwright end-to-end flow, all running in GitHub Actions (with coverage and a vulnerable-package gate). OpenTelemetry traces/metrics (OTLP), rate limiting, CSP/HSTS security headers, a non-root multi-stage Dockerfile, docker-compose and a Render blueprint.
+- **Quality & ops:** 123 unit + integration tests against a real PostgreSQL (WebApplicationFactory) plus a Playwright end-to-end flow, all running in GitHub Actions (with coverage and a vulnerable-package gate). OpenTelemetry traces/metrics (OTLP), rate limiting, CSP/HSTS security headers, a non-root multi-stage Dockerfile, docker-compose and a Render blueprint.
 
 I build this kind of system for clients — internal tools, dashboards, APIs and integrations in .NET.
 
