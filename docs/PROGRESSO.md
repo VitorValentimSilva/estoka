@@ -76,6 +76,7 @@ Legenda: ✅ feito · 🚧 em andamento · ⏳ pendente
 ## Manutenção — dependências ✅
 - ✅ Atualizações do Dependabot consolidadas: EF Core/ASP.NET Core 10.0.15, OpenTelemetry 1.21.0, Scalar 2.20.0, xunit.v3 4.0.3, actions (checkout/setup-node/upload-artifact v7, setup-dotnet v6)
 - ✅ Dependabot ignora majors de Microsoft/EF/Npgsql (projeto fica no .NET 10 LTS)
+- ✅ MudBlazor 9.13, QuestPDF 2026.9.2, Scalar 3.0, Playwright 1.65; versões transitivas fixadas pelo CPM (EF Core 10.0.15 em todos os projetos); imagens Docker presas ao .NET 10
 
 ## Publicação da demo 🚧
 - ✅ `/health/live` (sem banco) para o health check do Render e para o ping que mantém a demo acordada — o Neon suspende quando não há uso
